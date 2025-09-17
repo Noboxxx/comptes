@@ -29,15 +29,50 @@ class Project:
         self.accounts = list()
         self.operations = list()
         self.categories = list()
+        self.version = '1'
 
     def get_data(self):
         data = {
             'accounts': self.accounts,
             'operations': self.operations,
             'categories': self.categories,
+            'version': self.version,
         }
 
         return data
+
+    def set_data(self, data):
+        accounts_map = dict()
+        for account_data in data['accounts']:
+            account_id = account_data['id']
+
+            account = Account()
+            account.id = account_id
+            account.name = account_data['name']
+            account.number = account_data['number']
+
+            accounts_map[account_id] = account
+
+        operations = list()
+        for operation_data in data['operations']:
+            account_id = operation_data['account.id']
+            account = accounts_map[account_id]
+
+            amount_txt = operation_data['amount']
+            amount = Amount.from_text(amount_txt)
+
+            operation = Operation()
+            operation.account = account
+            operation.label = operation_data['label']
+            operation.amount = amount
+            operation.category = operation_data['category']
+            operation.date = operation_data['date']
+            operation.note = operation_data['note']
+
+            operations.append(operation)
+
+        self.accounts = list(accounts_map.values())
+        self.operations = operations
 
     def get_years(self):
         years = list()
@@ -85,7 +120,7 @@ class Project:
 
         return month_account_operation
 
-    def get_balance(self, account, date):
+    def get_balance(self, account, date=None):
         balance = Amount()
 
         if date is not None:
@@ -131,11 +166,6 @@ class Project:
                         month_income.int += operation.amount.int
                         year_income.int += operation.amount.int
 
-                print('month', month)
-                print('month_expenses', month_expenses)
-                print('month_income', month_income)
-                print('month_total', month_total)
-
             else:
                 month_expenses = None
                 month_income = None
@@ -157,6 +187,72 @@ class Project:
         }
         return months_data, year_data
 
+    def save(self, file):
+        s = json_dumps(self)
+
+        with open(file, 'w', encoding='utf-8') as f:
+            f.write(s)
+
+    @classmethod
+    def open(cls, file):
+        with open(file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        version = data.get('version', None)
+        print('version', version)
+
+        project = cls()
+        project.set_data(data)
+
+        return project
+
+    def import_credit_agricole_csv(self, file, account=None):
+        with open(file, 'r') as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=';')
+            lines = [x for x in list(csv_reader) if x]
+
+        # account
+        if account is None:
+            account = Account()
+            account.name = 'untitled'
+
+            for line in lines:
+                first_item = line[0]
+
+                if first_item.startswith(('Compte', 'Livret')):
+                    account.name = first_item
+                    break
+
+            self.accounts.append(account)
+
+        # operations
+        operations = list()
+        for line in lines:
+            first_item = line[0]
+
+            date_match = re.match(r'\d{2}/\d{2}/\d{4}', first_item)
+
+            if date_match:
+                date, label, amount_taken, amount_given, _ = line
+
+                if amount_taken:
+                    amount_text = f'-{amount_taken}'
+                elif amount_given:
+                    amount_text = amount_given
+                else:
+                    raise Exception(f'Neither amount taken nor amount taken found for line {line!r}')
+
+                amount = Amount.from_text(amount_text)
+
+                operation = Operation()
+                operation.label = label.strip()
+                operation.date = date
+                operation.amount = amount
+                operation.account = account
+
+                operations.append(operation)
+
+        self.operations += operations
 
 class Date:
 
@@ -197,14 +293,14 @@ class Date:
 class Category:
 
     def __init__(self):
-        self.name = ''
+        self.name = str()
         self.color = 255, 0, 0
         self.sub_categories = list()
 
 class SubCategory:
 
     def __init__(self):
-        self.name = ''
+        self.name = str()
         self.emoji = '🚗'
 
 class Amount:
@@ -286,8 +382,8 @@ class Account:
 
     def __init__(self):
         self.id = random_id()
-        self.name = ''
-        self.number = ''
+        self.name = str()
+        self.number = str()
 
     def __str__(self):
         s = self.name
@@ -301,6 +397,27 @@ class Account:
             'name': self.name,
             'number': self.number,
         }
+        return data
+
+class Operation:
+    def __init__(self):
+        self.account = Account()
+        self.label = str()
+        self.amount = Amount()
+        self.category = Category()
+        self.date = str()
+        self.note = str()
+
+    def get_data(self):
+        data = {
+            'account.id': self.account.id,
+            'label': self.label,
+            'amount': self.amount,
+            'category': self.category,
+            'date': self.date,
+            'note': self.note,
+        }
+
         return data
 
 # class Operations(list):
@@ -496,33 +613,3 @@ class Account:
 #     def from_project_csv(cls, file):
 #         operations = cls()
 #         return operations
-
-class Operation:
-    def __init__(self):
-        self.account = Account()
-        self.label = ''
-        self.amount = Amount()
-        self.category = Category()
-        self.date = ''
-        self.note = ''
-
-    def get_data(self):
-        data = {
-            'account.id': self.account.id,
-            'label': self.label,
-            'amount': self.amount,
-            'category': self.category,
-            'date': self.date,
-            'note': self.note,
-        }
-
-        return data
-
-def save_project(project, file):
-    s = json_dumps(project)
-
-    with open(file, 'w', encoding='utf-8') as f:
-        f.write(s)
-
-def open_project(file):
-    pass

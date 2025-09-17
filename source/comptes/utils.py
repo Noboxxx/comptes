@@ -15,7 +15,8 @@ def json_dumps(data):
     def plop(x):
         if hasattr(x, 'get_data'):
             return x.get_data()
-        return str(x)
+        else:
+            return str(x)
 
     s = json.dumps(data, default=plop, ensure_ascii=False, indent=4)
     return s

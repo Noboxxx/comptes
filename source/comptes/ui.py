@@ -150,6 +150,12 @@ class MonthlyTable(QTableWidget):
 		for index in range(len(self.h_headers)):
 			self.setColumnWidth(index, 80)
 
+		header = self.horizontalHeader()
+		header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+		vheader = self.verticalHeader()
+		vheader.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
 
 	def set_header_labels(self):
 		self.setVerticalHeaderLabels(self.v_headers)
@@ -244,6 +250,9 @@ class OperationsTree(QTreeWidget):
 			if date['year'] != self.selected_year:
 				continue
 
+			if operation.account is not self.selected_account:
+				continue
+
 			tree_item = OperationTreeItem()
 			tree_item.operation = operation
 			tree_item.reload()
@@ -257,9 +266,6 @@ class ComptesWidget(QWidget):
 		super().__init__()
 
 		self.project = Project()
-
-		self.selected_account = None
-		self.selected_year = None
 
 		# account_combo
 		self.account_combo = QComboBox()
@@ -287,48 +293,125 @@ class ComptesWidget(QWidget):
 
 		# operations_tree
 		self.operations_tree = OperationsTree()
-		# self.operations_tree.itemSelectionChanged.connect(self.selected_operations_changes)
+		self.operations_tree.itemSelectionChanged.connect(self.reload_selection_info_label)
+
+		top_layout = QVBoxLayout()
+		top_layout.addWidget(self.account_combo)
+		top_layout.addWidget(self.years_combo)
+		top_layout.addWidget(self.monthly_table)
+
+		bot_layout = QVBoxLayout()
+		bot_layout.addLayout(operations_info_layout)
+		bot_layout.addWidget(self.operations_tree)
+
+		# splitter
+		splitter = QSplitter(Qt.Orientation.Vertical)
+
+		layouts = top_layout, bot_layout
+		for layout in layouts:
+			w = QWidget()
+			w.setLayout(layout)
+			splitter.addWidget(w)
+
+		sizes = 100, 250
+		splitter.setSizes(sizes)
 
 		# main_layout
 		main_layout = QVBoxLayout()
-		main_layout.addWidget(self.account_combo)
-		main_layout.addWidget(self.years_combo)
-		main_layout.addWidget(self.monthly_table)
-		main_layout.addLayout(operations_info_layout)
-		main_layout.addWidget(self.operations_tree)
+		main_layout.addWidget(splitter)
 
 		self.setLayout(main_layout)
 
-	def save_as(self):
+	def save_as_project(self):
 		path, flt = QFileDialog.getSaveFileName(self)
 
 		if not path:
 			print('Operation canceled')
 			return
 
-		save_project(self.project, path)
+		self.project.save(path)
 		print(f'File saved at {path!r}')
+
+	def new_project(self):
+		reply = QMessageBox.question(
+			self,
+			'New Project',
+			'This is not undoable. Are you sure?',
+			QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+		)
+
+		if reply != QMessageBox.StandardButton.Yes:
+			print('Operation Canceled')
+			return
+
+		self.project = Project()
+
+		self.reload()
+
+	def open_project(self):
+		path, flt = QFileDialog.getOpenFileName(self)
+
+		if not path:
+			print('Operation canceled')
+			return
+
+		self.project = Project.open(path)
+
+		self.reload()
+
+	def import_credit_agricole_csv(self):
+		account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
+
+		path, flt = QFileDialog.getOpenFileName(self)
+
+		if not path:
+			print('Operation canceled')
+			return
+
+		self.project.import_credit_agricole_csv(path, account)
+
+		self.reload()
+
+	def print_project(self):
+		print_json(self.project)
 
 	def get_menu_bar(self):
 		save_as_project_action = QAction('Save as', self)
-		save_as_project_action.triggered.connect(self.save_as)
+		save_as_project_action.setShortcut('Ctrl+S')
+		save_as_project_action.triggered.connect(self.save_as_project)
 
 		open_project_action = QAction('Open', self)
-		new_project_action = QAction('New', self)
+		open_project_action.setShortcut('Ctrl+O')
+		open_project_action.triggered.connect(self.open_project)
 
-		project_menu = QMenu('Project', self)
-		project_menu.addAction(open_project_action)
-		project_menu.addAction(save_as_project_action)
-		project_menu.addAction(new_project_action)
+		new_project_action = QAction('New', self)
+		new_project_action.setShortcut('Ctrl+N')
+		new_project_action.triggered.connect(self.new_project)
+
+		print_project_action = QAction('Print', self)
+		print_project_action.triggered.connect(self.print_project)
+
+		# project_menu = QMenu('Project', self)
+		# project_menu.addAction(open_project_action)
+		# project_menu.addAction(save_as_project_action)
+		# project_menu.addAction(new_project_action)
+		# project_menu.addSeparator()
+		# project_menu.addAction(print_project_action)
 
 		import_ca_action = QAction('Crédit Agricole (.csv)', self)
+		import_ca_action.triggered.connect(self.import_credit_agricole_csv)
 
 		import_menu = QMenu('Import')
 		import_menu.addAction(import_ca_action)
 
 		file_menu = QMenu('File')
-		file_menu.addMenu(project_menu)
+		file_menu.addAction(open_project_action)
+		file_menu.addAction(save_as_project_action)
+		file_menu.addAction(new_project_action)
+		file_menu.addSeparator()
 		file_menu.addMenu(import_menu)
+		file_menu.addSeparator()
+		file_menu.addAction(print_project_action)
 
 		edit_menu = QMenu('Edit')
 
@@ -378,120 +461,125 @@ class ComptesWidget(QWidget):
 		self.reload()
 
 	def reload_children(self):
-		self.selected_account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
-		self.selected_year = self.years_combo.currentText()
-
 		self.reload_monthly_table()
 		self.reload_operations_tree()
+		self.reload_selection_info_label()
+		self.reload_account_info_label()
 
 	def reload_monthly_table(self):
 		self.monthly_table.project = self.project
-		self.monthly_table.selected_account = self.selected_account
-		self.monthly_table.selected_year = self.selected_year
+		self.monthly_table.selected_account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
+		self.monthly_table.selected_year = self.years_combo.currentText()
 
 		self.monthly_table.reload()
 
 	def reload_operations_tree(self):
 		self.operations_tree.project = self.project
-		self.operations_tree.selected_account = self.selected_account
-		self.operations_tree.selected_year = self.selected_year
+		self.operations_tree.selected_account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
+		self.operations_tree.selected_year = self.years_combo.currentText()
 
 		self.operations_tree.reload()
 
-	# def selected_operations_changes(self):
-	# 	selected_items = self.operations_tree.selectedItems()
-	#
-	# 	n_selected = len(selected_items)
-	#
-	# 	# selection info
-	# 	sum_amount = 0
-	# 	average_amount = 0
-	# 	min_amount = 0
-	# 	max_amount = 0
-	# 	label = (f'Selected Operations: {n_selected}\n'
-	# 			 f'Sum: {sum_amount} | '
-	# 			 f'Average: {average_amount} | '
-	# 			 f'Min: {min_amount} | '
-	# 			 f'Max: {max_amount}')
-	# 	self.selection_info_label.setText(label)
-	#
-	# def reload_children(self):
-	# 	year = self.years_combo.currentText()
-	#
-	# 	self.operations_tree.year = year
-	# 	self.operations_tree.reload()
-	#
-	# 	self.monthly_table.year = year
-	# 	self.monthly_table.reload()
-	#
-	# 	account = self.account_combo.currentText()
-	#
-	# 	if account:
-	# 		account_operations = self.project.operations.get_account_operations(account)
-	#
-	# 		# operations tree
-	# 		self.operations_tree.operations = account_operations
-	# 		self.operations_tree.reload()
-	#
-	# 		# monthly table
-	# 		self.monthly_table.operations = account_operations
-	# 		self.monthly_table.reload()
-	#
-	# 		# account balance
-	# 		account_balance = account_operations.get_balance()
-	# 		account_operations_number = len(account_operations)
-	# 	else:
-	# 		account_balance = Amount()
-	# 		account_operations_number = 0
-	#
-	# 	label = f'Balance: {account_balance}\nOperations: {account_operations_number}'
-	# 	self.account_info_label.setText(label)
+	def reload_selection_info_label(self):
+		selected_items = self.operations_tree.selectedItems()
+
+		n_selected = len(selected_items)
+
+		# selection info
+		sum_amount = 0
+		average_amount = 0
+		min_amount = 0
+		max_amount = 0
+		label = (
+			f'Selected Operations: {n_selected}\n'
+			 f'Sum: {sum_amount} | '
+			 f'Average: {average_amount} | '
+			 f'Min: {min_amount} | '
+			 f'Max: {max_amount}'
+		)
+		self.selection_info_label.setText(label)
+
+	def reload_account_info_label(self):
+		account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
+
+		if account:
+			account_operations = self.project.get_account_operations(account)
+
+			account_balance = self.project.get_balance(account_operations)
+			account_operations_number = len(account_operations)
+		else:
+			account_balance = Amount()
+			account_operations_number = 0
+
+		label = f'Balance: {account_balance}\nOperations: {account_operations_number}'
+		self.account_info_label.setText(label)
 
 	def reload_accounts_combo(self):
 		accounts = self.project.accounts
+
+		current_index = self.account_combo.currentIndex()
 
 		self.account_combo.clear()
 		for account in accounts:
 			self.account_combo.addItem(str(account), userData=account)
 
+		if not accounts:
+			return
+
+		if current_index == -1:
+			current_index = 0
+
+		self.account_combo.setCurrentIndex(current_index)
+
 	def reload_years_combo(self):
 		years = self.project.get_years()
+
+		current_index = self.years_combo.currentIndex()
 
 		self.years_combo.clear()
 		for year in years:
 			self.years_combo.addItem(year)
 
+		if not years:
+			return
+
+		if current_index == -1:
+			current_index = 0
+
+		self.years_combo.setCurrentIndex(current_index)
+
 	def reload(self):
 		self.reload_accounts_combo()
 		self.reload_years_combo()
+		self.reload_children()
 
 
 def open_comptes():
 	app = QApplication()
 
-	account = Account()
-	account.name = 'Compte Chèque'
-	account.number = '123456'
-
-	operation1 = Operation()
-	operation1.date = '02/01/2025'
-	operation1.label = 'plip plop ploup'
-	operation1.account = account
-	operation1.amount = Amount(-15000)
-
-	operation2 = Operation()
-	operation2.date = '01/01/2025'
-	operation2.label = 'bim bam boom'
-	operation2.account = account
-	operation2.amount = Amount(10000)
-
-	project = Project()
-	project.accounts.append(account)
-	project.operations.append(operation1)
-	project.operations.append(operation2)
+	# account = Account()
+	# account.name = 'Compte Chèque'
+	# account.number = '123456'
+	#
+	# operation1 = Operation()
+	# operation1.date = '02/01/2025'
+	# operation1.label = 'plip plop ploup'
+	# operation1.account = account
+	# operation1.amount = Amount(-15000)
+	#
+	# operation2 = Operation()
+	# operation2.date = '01/01/2025'
+	# operation2.label = 'bim bam boom'
+	# operation2.account = account
+	# operation2.amount = Amount(10000)
+	#
+	# project = Project()
+	# project.accounts.append(account)
+	# project.operations.append(operation1)
+	# project.operations.append(operation2)
 
 	w = ComptesWidget()
-	w.project = project
+	# w.project = project
 	w.reload()
 
 	ui = QMainWindow()
