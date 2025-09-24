@@ -29,13 +29,16 @@ class Project:
         self.accounts = list()
         self.operations = list()
         self.categories = list()
+        self.category_groups = list()
+
         self.version = '1'
 
     def get_data(self):
         data = {
-            'accounts': self.accounts,
             'operations': self.operations,
+            'accounts': self.accounts,
             'categories': self.categories,
+            'category_groups': self.category_groups,
             'version': self.version,
         }
 
@@ -53,6 +56,30 @@ class Project:
 
             accounts_map[account_id] = account
 
+        category_groups_map = dict()
+        for category_group_data in data['category_groups']:
+            category_group_id = category_group_data['id']
+
+            category_group = CategoryGroup()
+            category_group.id = category_group_id
+            category_group.name = category_group_data['name']
+            category_group.color = category_group_data['color']
+
+            category_groups_map[category_group_id] = category_group
+
+        categories = list()
+        for category_data in data['categories']:
+            category_group_id = category_data['category_group.id']
+            category_group = category_groups_map[category_group_id]
+
+            category = Category()
+            category.id = category_data['id']
+            category.name = category_data['name']
+            category.emoji = category_data['emoji']
+            category.category_group = category_group
+
+            categories.append(category)
+
         operations = list()
         for operation_data in data['operations']:
             account_id = operation_data['account.id']
@@ -61,11 +88,14 @@ class Project:
             amount_txt = operation_data['amount']
             amount = Amount.from_text(amount_txt)
 
+            category_id = operation_data['category.id']
+            category = categories[category_id]
+
             operation = Operation()
             operation.account = account
             operation.label = operation_data['label']
             operation.amount = amount
-            operation.category = operation_data['category']
+            operation.category = category
             operation.date = operation_data['date']
             operation.note = operation_data['note']
 
@@ -73,6 +103,8 @@ class Project:
 
         self.accounts = list(accounts_map.values())
         self.operations = operations
+        self.category_groups = list(category_groups_map.values())
+        self.categories = categories
 
     def get_years(self):
         years = list()
@@ -290,18 +322,43 @@ class Date:
 
         return date
 
+class CategoryGroup:
+
+    def __init__(self):
+        self.id = random_id()
+        self.name = str()
+        self.color = 0, 0, 0
+
+    def __str__(self):
+        return self.name
+
+    def get_data(self):
+        data = {
+            'id': self.id,
+            'name': self.name,
+            'color': self.color,
+        }
+        return data
+
 class Category:
 
     def __init__(self):
+        self.id = random_id()
         self.name = str()
-        self.color = 255, 0, 0
-        self.sub_categories = list()
+        self.emoji = str()
+        self.category_group = CategoryGroup()
 
-class SubCategory:
+    def __str__(self):
+        return self.name
 
-    def __init__(self):
-        self.name = str()
-        self.emoji = '🚗'
+    def get_data(self):
+        data = {
+            'id': self.id,
+            'name': self.name,
+            'emoji': self.emoji,
+            'category_group.id': self.category_group.id,
+        }
+        return data
 
 class Amount:
 
@@ -388,7 +445,7 @@ class Account:
     def __str__(self):
         s = self.name
         if self.number:
-            s += f' ({self.number})'
+            s += f' (n°{self.number})'
         return s
 
     def get_data(self):
@@ -400,6 +457,7 @@ class Account:
         return data
 
 class Operation:
+
     def __init__(self):
         self.account = Account()
         self.label = str()
@@ -413,203 +471,9 @@ class Operation:
             'account.id': self.account.id,
             'label': self.label,
             'amount': self.amount,
-            'category': self.category,
+            'category.id': self.category.id,
             'date': self.date,
             'note': self.note,
         }
-
+        print(data)
         return data
-
-# class Operations(list):
-#
-#     def get_years(self):
-#         years = list()
-#
-#         for operation in self:
-#             operation_day, operation_year, operation_year = operation.date.split('/')
-#
-#             if operation_year not in years:
-#                 years.append(operation_year)
-#
-#         years.sort()
-#         years.reverse()
-#         return years
-#
-#     def get_month_operations(self, month, year):
-#         month_operations = Operations()
-#
-#         for operation in self:
-#             operation_day, operation_month, operation_year = operation.date.split('/')
-#
-#             if operation_month == month and operation_year == year:
-#                 month_operations.append(operation)
-#
-#         return month_operations
-#
-#     def get_expenses(self):
-#         amount = Amount()
-#         for operation in self:
-#             if operation.amount.amount < 0:
-#                 amount.amount += operation.amount.amount
-#         return amount
-#
-#     def get_income(self):
-#         amount = Amount()
-#         for operation in self:
-#             if operation.amount.amount > 0:
-#                 amount.amount += operation.amount.amount
-#         return amount
-#
-#     def get_months_stats(self, year):
-#         months_data = dict()
-#
-#         year_expenses = Amount()
-#         year_income = Amount()
-#         year_total = Amount()
-#
-#         for index in range(12):
-#             month = f'{index + 1:02d}'
-#
-#             month_operations = self.get_month_operations(month, year)
-#
-#             if month_operations:
-#                 last_day_month = get_number_of_days(month, year)
-#                 month_balance = self.get_balance(f'{last_day_month}/{month}/{year}')
-#
-#                 month_expenses = month_operations.get_expenses()
-#                 year_expenses.amount += month_expenses.amount
-#
-#                 month_income = month_operations.get_income()
-#                 year_income.amount += month_income.amount
-#
-#                 month_total = Amount(month_expenses.amount + month_income.amount)
-#                 year_total.amount += month_total.amount
-#             else:
-#                 month_expenses = None
-#                 month_income = None
-#                 month_total = None
-#                 month_balance = None
-#
-#             months_data[month] = {
-#                 "expenses": month_expenses,
-#                 "income": month_income,
-#                 "total": month_total,
-#                 "balance": month_balance,
-#             }
-#
-#         year_data = {
-#             'expenses': year_expenses,
-#             'income': year_income,
-#             'total': year_total,
-#             'balance': None,
-#         }
-#         return months_data, year_data
-#
-#     def get_account_operations(self, account):
-#         account_operations = Operations()
-#
-#         for operation in self:
-#             if operation.account != account:
-#                 continue
-#
-#             account_operations.append(operation)
-#
-#         return account_operations
-#
-#     def get_accounts(self):
-#         accounts = list()
-#
-#         for operation in self:
-#             account = operation.account
-#
-#             if account not in accounts:
-#                 accounts.append(account)
-#
-#         return accounts
-#
-#     def get_balance(self, date=None):
-#         balance = Amount()
-#
-#         if date is not None:
-#             date = datetime.strptime(date, "%d/%m/%Y")
-#
-#         for operation in self:
-#             operation_date = datetime.strptime(operation.date, "%d/%m/%Y")
-#
-#             if date is None or operation_date <= date:
-#                 balance.amount += operation.amount.amount
-#
-#         return balance
-#
-#     @classmethod
-#     def from_ugly_csv(cls, file):
-#         with open(file, 'r', encoding='utf-8') as csv_file:
-#             csv_reader = csv.reader(csv_file)
-#
-#             next(csv_reader)
-#             all_values = list(csv_reader)
-#
-#         operations = cls()
-#         for values in all_values:
-#             operation = Operation()
-#             operation.label = values[0]
-#             operation.date = values[1]
-#
-#             amount = Amount.from_text(values[3])
-#             operation.amount = amount
-#
-#             operation.account = values[4]
-#             operation.category = values[6]
-#             operation.type = values[7]
-#             operation.note = values[8]
-#
-#             operations.append(operation)
-#
-#         return operations
-#
-#     @classmethod
-#     def from_credit_agricole_csv(cls, file):
-#         operations = cls()
-#
-#         with open(file, 'r') as csv_file:
-#             csv_reader = csv.reader(csv_file, delimiter=';')
-#
-#             lines = list(csv_reader)
-#
-#         account = None
-#
-#         for line in lines:
-#             if not line:
-#                 continue
-#
-#             first_item = line[0]
-#             if first_item.startswith(('Compte', 'Livret')):
-#                 account = first_item
-#                 continue
-#
-#             date_match = re.match(r'\d{2}/\d{2}/\d{4}', first_item)
-#
-#             if date_match:
-#                 date, label, amount_taken, amount_given, _ = line
-#
-#                 if amount_taken:
-#                     amount = Amount.from_text(f'-{amount_taken}')
-#                 elif amount_given:
-#                     amount = Amount.from_text(amount_given)
-#                 else:
-#                     raise Exception(f'Neither amount taken nor amount taken found for line {line!r}')
-#
-#                 operation = Operation()
-#                 operation.label = label.strip()
-#                 operation.date = date
-#                 operation.amount = amount
-#                 operation.account = account
-#
-#                 operations.append(operation)
-#
-#         return operations
-#
-#     @classmethod
-#     def from_project_csv(cls, file):
-#         operations = cls()
-#         return operations
