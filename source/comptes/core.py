@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import re
 
 
-from .utils import get_number_of_days, json_dumps, random_id, split_date
+from .utils import get_number_of_days, json_dumps, random_id, split_date, create_category_pixmap, create_category_icon
 
 
 class CURRENCIES:
@@ -67,18 +67,20 @@ class Project:
 
             category_groups_map[category_group_id] = category_group
 
-        categories = list()
+        categories_map = dict()
         for category_data in data['categories']:
             category_group_id = category_data['category_group.id']
             category_group = category_groups_map[category_group_id]
 
+            category_id = category_data['id']
+
             category = Category()
-            category.id = category_data['id']
+            category.id = category_id
             category.name = category_data['name']
             category.emoji = category_data['emoji']
             category.category_group = category_group
 
-            categories.append(category)
+            categories_map[category_id] = category
 
         operations = list()
         for operation_data in data['operations']:
@@ -89,7 +91,7 @@ class Project:
             amount = Amount.from_text(amount_txt)
 
             category_id = operation_data['category.id']
-            category = categories[category_id]
+            category = categories_map.get(category_id)
 
             operation = Operation()
             operation.account = account
@@ -104,7 +106,7 @@ class Project:
         self.accounts = list(accounts_map.values())
         self.operations = operations
         self.category_groups = list(category_groups_map.values())
-        self.categories = categories
+        self.categories = list(categories_map.values())
 
     def get_years(self):
         years = list()
@@ -238,24 +240,10 @@ class Project:
 
         return project
 
-    def import_credit_agricole_csv(self, file, account=None):
+    def import_credit_agricole_csv(self, file, account):
         with open(file, 'r') as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=';')
             lines = [x for x in list(csv_reader) if x]
-
-        # account
-        if account is None:
-            account = Account()
-            account.name = 'untitled'
-
-            for line in lines:
-                first_item = line[0]
-
-                if first_item.startswith(('Compte', 'Livret')):
-                    account.name = first_item
-                    break
-
-            self.accounts.append(account)
 
         # operations
         operations = list()
@@ -340,6 +328,22 @@ class CategoryGroup:
         }
         return data
 
+    def get_pixmap(self, radius):
+        pixmap = create_category_pixmap(
+            text='',
+            color=self.color,
+            radius=radius
+        )
+        return pixmap
+
+    def get_icon(self, radius):
+        icon = create_category_icon(
+            text='',
+            color=self.color,
+            radius=radius
+        )
+        return icon
+
 class Category:
 
     def __init__(self):
@@ -359,6 +363,22 @@ class Category:
             'category_group.id': self.category_group.id,
         }
         return data
+
+    def get_pixmap(self, radius):
+        pixmap = create_category_pixmap(
+            text=self.emoji,
+            color=self.category_group.color,
+            radius=radius
+        )
+        return pixmap
+
+    def get_icon(self, radius):
+        icon = create_category_icon(
+            text=self.emoji,
+            color=self.category_group.color,
+            radius=radius
+        )
+        return icon
 
 class Amount:
 
@@ -462,18 +482,23 @@ class Operation:
         self.account = Account()
         self.label = str()
         self.amount = Amount()
-        self.category = Category()
+        self.category = None
         self.date = str()
         self.note = str()
 
     def get_data(self):
+        category = self.category
+        if category is None:
+            category_id = None
+        else:
+            category_id = category.id
+
         data = {
             'account.id': self.account.id,
             'label': self.label,
             'amount': self.amount,
-            'category.id': self.category.id,
+            'category.id': category_id,
             'date': self.date,
             'note': self.note,
         }
-        print(data)
         return data
