@@ -79,6 +79,7 @@ class Project:
             category.name = category_data['name']
             category.emoji = category_data['emoji']
             category.category_group = category_group
+            category.keywords = category_data.get('keywords', list())
 
             categories_map[category_id] = category
 
@@ -351,6 +352,7 @@ class Category:
         self.name = str()
         self.emoji = str()
         self.category_group = CategoryGroup()
+        self.keywords = list()
 
     def __str__(self):
         return self.name
@@ -361,6 +363,7 @@ class Category:
             'name': self.name,
             'emoji': self.emoji,
             'category_group.id': self.category_group.id,
+            'keywords': self.keywords,
         }
         return data
 
@@ -477,6 +480,9 @@ class Account:
         return data
 
 class Operation:
+    
+    MODE_NORMAL = 0
+    MODE_BUDGET = 1
 
     def __init__(self):
         self.account = Account()
@@ -485,6 +491,7 @@ class Operation:
         self.category = None
         self.date = str()
         self.note = str()
+        self.mode = self.MODE_NORMAL
 
     def get_data(self):
         category = self.category

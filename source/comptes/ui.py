@@ -211,10 +211,14 @@ class CategoryEditor(QDialog):
         self.emoji_line = QLineEdit()
         self.emoji_line.setPlaceholderText('🪙')
 
+        self.keywords_text = QTextEdit()
+        self.keywords_text.setPlaceholderText('keyword1\nkeyword2\nkeyword3\n...')
+
         form_layout = QFormLayout()
         form_layout.addRow('Name', self.name_line)
         form_layout.addRow('Emoji', self.emoji_line)
         form_layout.addRow('Category Group', self.category_group_combo)
+        form_layout.addRow('Keywords', self.keywords_text)
 
         ok_btn = QPushButton('Ok')
         ok_btn.clicked.connect(self.validate)
@@ -238,9 +242,13 @@ class CategoryEditor(QDialog):
         emoji = self.emoji_line.text() or self.emoji_line.placeholderText()
         category_group = self.category_group_combo.currentData(Qt.ItemDataRole.UserRole)
 
+        keywords_text = self.keywords_text.toPlainText()
+        keywords = [x for x in keywords_text.strip().split('\n') if x]
+
         self.category.name = name
         self.category.emoji = emoji
         self.category.category_group = category_group
+        self.category.keywords = keywords
 
         self.accept()
 
@@ -249,8 +257,12 @@ class CategoryEditor(QDialog):
         emoji = self.category.emoji
         category_group = self.category.category_group
 
+        keywords_text = self.category.keywords
+        keywords = '\n'.join(keywords_text)
+
         self.name_line.setText(name)
         self.emoji_line.setText(emoji)
+        self.keywords_text.setText(keywords)
 
         selected_index = -1
         self.category_group_combo.clear()
@@ -597,7 +609,6 @@ class MonthlyTable(QTableWidget):
         vheader = self.verticalHeader()
         vheader.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
-
     def set_header_labels(self):
         self.setVerticalHeaderLabels(self.v_headers)
         self.setHorizontalHeaderLabels(self.h_headers)
@@ -635,15 +646,12 @@ class MonthlyTable(QTableWidget):
 
 class OperationItem(QTreeWidgetItem):
 
-    HEADERS_LABEL = 'category', 'date', 'amount', 'label'
-    HEADERS_WIDTH = 150, None, None, None
-
     def __init__(self):
         super().__init__()
 
         self.operation = Operation()
 
-        for index in range(len(self.HEADERS_LABEL)):
+        for index in range(len(OperationsTree.HEADERS_LABEL)):
             self.setSizeHint(index, QSize(0, 50))
 
     def reload(self):
@@ -677,6 +685,9 @@ class OperationItem(QTreeWidgetItem):
 
 class OperationsTree(QTreeWidget):
 
+    HEADERS_LABEL = 'category', 'date', 'amount', 'label'
+    HEADERS_WIDTH = 200, None, None, None
+
     def __init__(self):
         super().__init__()
 
@@ -685,13 +696,13 @@ class OperationsTree(QTreeWidget):
         self.selected_account = None
         self.selected_year = None
 
-        self.setHeaderLabels(OperationItem.HEADERS_LABEL)
+        self.setHeaderLabels(self.HEADERS_LABEL)
         self.setAlternatingRowColors(True)
         self.setSelectionMode(self.SelectionMode.ExtendedSelection)
         # self.setSortingEnabled(True)
         self.setIconSize(QSize(22, 22))
 
-        for index, width in enumerate(OperationItem.HEADERS_WIDTH):
+        for index, width in enumerate(self.HEADERS_WIDTH):
             if width is None:
                 continue
             self.setColumnWidth(index, width)
@@ -726,6 +737,195 @@ class OperationsTree(QTreeWidget):
             self.addTopLevelItem(tree_item)
 
 
+class CategoryGroupSummaryItem(QTreeWidgetItem):
+
+    def __init__(self):
+        super().__init__()
+
+        self.category_group = None
+
+        self.project = None
+
+        self.selected_account = None
+        self.selected_year = None
+
+    def reload(self):
+        self.setText(0, self.category_group.name)
+        self.setIcon(0, self.category_group.get_icon(16))
+
+        year_sum = Amount()
+        for index in range(12):
+            month = index + 1
+            month_year_formatted = f'{month:02d}/{self.selected_year}'
+
+            # operations
+            operations = self.project.operations
+            operations = [x for x in operations if x.account is self.selected_account]
+            operations = [x for x in operations if x.date.endswith(month_year_formatted)]
+            operations = [x for x in operations if x.category and x.category.category_group is self.category_group]
+
+            # amount
+            month_sum = Amount()
+            for operation in operations:
+                month_sum.int += operation.amount.int
+
+            year_sum.int += month_sum.int
+
+            self.setText(month, str(month_sum))
+
+            # color
+            if month_sum.int > 0:
+                color = Qt.GlobalColor.darkGreen
+            elif month_sum.int < 0:
+                color = Qt.GlobalColor.red
+            else:
+                color = Qt.GlobalColor.lightGray
+
+            self.setForeground(month, QColor(color))
+
+        # year
+        self.setText(13, str(year_sum))
+
+        # color
+        if year_sum.int > 0:
+            color = Qt.GlobalColor.darkGreen
+        elif year_sum.int < 0:
+            color = Qt.GlobalColor.red
+        else:
+            color = Qt.GlobalColor.lightGray
+
+        self.setForeground(13, QColor(color))
+
+
+class CategorySummaryItem(QTreeWidgetItem):
+
+    def __init__(self):
+        super().__init__()
+
+        self.project = None
+        self.category = None
+
+        self.selected_account = None
+        self.selected_year = None
+
+    def reload(self):
+        self.setText(0, self.category.name)
+        self.setIcon(0, self.category.get_icon(16))
+
+        year_sum = Amount()
+        for index in range(12):
+            month = index + 1
+            month_year_formatted = f'{month:02d}/{self.selected_year}'
+
+            # operations
+            operations = self.project.operations
+            operations = [x for x in operations if x.account is self.selected_account]
+            operations = [x for x in operations if x.date.endswith(month_year_formatted)]
+            operations = [x for x in operations if x.category is self.category]
+
+            # amount
+            month_amount = Amount()
+            for operation in operations:
+                month_amount.int += operation.amount.int
+
+            year_sum.int += month_amount.int
+
+            self.setText(month, str(month_amount))
+
+            # color
+            if month_amount.int > 0:
+                color = Qt.GlobalColor.darkGreen
+            elif month_amount.int < 0:
+                color = Qt.GlobalColor.red
+            else:
+                color = Qt.GlobalColor.lightGray
+
+            self.setForeground(month, QColor(color))
+
+        # year
+        self.setText(13, str(year_sum))
+
+        # color
+        if year_sum.int > 0:
+            color = Qt.GlobalColor.darkGreen
+        elif year_sum.int < 0:
+            color = Qt.GlobalColor.red
+        else:
+            color = Qt.GlobalColor.lightGray
+
+        self.setForeground(13, QColor(color))
+
+
+
+class CategorySummaryTree(QTreeWidget):
+
+    HEADERS_MAP = {
+        'Category': 150,
+        'January': None,
+        'February': None,
+        'March': None,
+        'April': None,
+        'May': None,
+        'June': None,
+        'July': None,
+        'August': None,
+        'September': None,
+        'October': None,
+        'November': None,
+        'December': None,
+        'Year': None
+    }
+
+    def __init__(self):
+        super().__init__()
+
+        self.project = None
+        self.selected_account = None
+        self.selected_year = None
+
+        self.setAlternatingRowColors(True)
+
+        headers = list(self.HEADERS_MAP.keys())
+        self.setHeaderLabels(headers)
+
+        for index, width in enumerate(self.HEADERS_MAP.values()):
+            if width is None:
+                continue
+
+            self.setColumnWidth(index, width)
+
+    def reload(self):
+        self.clear()
+
+        if self.project is None:
+            print('No project found')
+            return
+
+        category_group_item_map = dict()
+        for category_group in self.project.category_groups:
+            category_group_summary_item = CategoryGroupSummaryItem()
+            category_group_summary_item.category_group = category_group
+            category_group_summary_item.project = self.project
+            category_group_summary_item.selected_account = self.selected_account
+            category_group_summary_item.selected_year = self.selected_year
+            category_group_summary_item.reload()
+
+            category_group_item_map[category_group.id] = category_group_summary_item
+
+            self.addTopLevelItem(category_group_summary_item)
+
+        for category in self.project.categories:
+            category_summary_item = CategorySummaryItem()
+            category_summary_item.category = category
+            category_summary_item.project = self.project
+            category_summary_item.selected_account = self.selected_account
+            category_summary_item.selected_year = self.selected_year
+            category_summary_item.reload()
+
+            category_group_item = category_group_item_map[category.category_group.id]
+            category_group_item.addChild(category_summary_item)
+
+
 class ComptesWidget(QWidget):
 
     def __init__(self):
@@ -746,6 +946,9 @@ class ComptesWidget(QWidget):
         # monthly table
         self.monthly_table = MonthlyTable()
 
+        # category_tree
+        self.category_summary_tree = CategorySummaryTree()
+
         # info
         self.account_info_label = QLabel()
 
@@ -761,30 +964,16 @@ class ComptesWidget(QWidget):
         self.operations_tree = OperationsTree()
         self.operations_tree.itemSelectionChanged.connect(self.reload_selection_info_label)
 
-        top_layout = QVBoxLayout()
-        top_layout.addWidget(self.account_combo)
-        top_layout.addWidget(self.years_combo)
-        top_layout.addWidget(self.monthly_table)
-
-        bot_layout = QVBoxLayout()
-        bot_layout.addLayout(operations_info_layout)
-        bot_layout.addWidget(self.operations_tree)
-
-        # splitter
-        splitter = QSplitter(Qt.Orientation.Vertical)
-
-        layouts = top_layout, bot_layout
-        for layout in layouts:
-            w = QWidget()
-            w.setLayout(layout)
-            splitter.addWidget(w)
-
-        sizes = 100, 250
-        splitter.setSizes(sizes)
+        tab = QTabWidget()
+        tab.addTab(self.category_summary_tree, 'Categories')
+        tab.addTab(self.monthly_table, 'Summary')
+        tab.addTab(self.operations_tree, 'Operations')
 
         # main_layout
         main_layout = QVBoxLayout()
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(self.account_combo)
+        main_layout.addWidget(self.years_combo)
+        main_layout.addWidget(tab)
 
         self.setLayout(main_layout)
 
@@ -860,13 +1049,6 @@ class ComptesWidget(QWidget):
         print_project_action = QAction('Print', self)
         print_project_action.triggered.connect(self.print_project)
 
-        # project_menu = QMenu('Project', self)
-        # project_menu.addAction(open_project_action)
-        # project_menu.addAction(save_as_project_action)
-        # project_menu.addAction(new_project_action)
-        # project_menu.addSeparator()
-        # project_menu.addAction(print_project_action)
-
         import_ca_action = QAction('Crédit Agricole (.csv)', self)
         import_ca_action.triggered.connect(self.import_credit_agricole_csv)
 
@@ -882,6 +1064,9 @@ class ComptesWidget(QWidget):
         file_menu.addSeparator()
         file_menu.addAction(print_project_action)
 
+        guess_category_on_selected_operations_act = QAction('Guess Category on Selected Operations', self)
+        guess_category_on_selected_operations_act.triggered.connect(self.guess_category_on_selected_operations)
+
         edit_account_act = QAction('Edit Current Account', self)
         edit_account_act.triggered.connect(self.edit_account)
 
@@ -895,6 +1080,8 @@ class ComptesWidget(QWidget):
         edit_menu.addAction(edit_operation_act)
         edit_menu.addAction(edit_categories_act)
         edit_menu.addAction(edit_account_act)
+        edit_menu.addSeparator()
+        edit_menu.addAction(guess_category_on_selected_operations_act)
 
         create_account_act = QAction('Create Account', self)
         create_account_act.triggered.connect(self.create_account)
@@ -913,6 +1100,30 @@ class ComptesWidget(QWidget):
         menu_bar.addMenu(create_menu)
 
         return menu_bar
+
+    def guess_category_on_selected_operations(self):
+        selected_operations = self.operations_tree.get_selected_operations()
+
+        for operation in selected_operations:
+            operation_label_lower = operation.label.lower()
+
+            new_category = None
+            for category in self.project.categories:
+                if new_category:
+                    break
+
+                for keyword in category.keywords:
+                    keyword_lower = keyword.lower()
+
+                    if keyword_lower in operation_label_lower:
+                        new_category = category
+                        break
+
+            if new_category:
+                operation.category = new_category
+
+        self.reload()
+
 
     def edit_categories(self):
         category_view = CategoryView(self)
@@ -997,10 +1208,18 @@ class ComptesWidget(QWidget):
         self.reload()
 
     def reload_children(self):
+        self.reload_category_summary_tree()
         self.reload_monthly_table()
         self.reload_operations_tree()
         self.reload_selection_info_label()
         self.reload_account_info_label()
+
+    def reload_category_summary_tree(self):
+        self.category_summary_tree.project = self.project
+        self.category_summary_tree.selected_account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
+        self.category_summary_tree.selected_year = self.years_combo.currentText()
+
+        self.category_summary_tree.reload()
 
     def reload_monthly_table(self):
         self.monthly_table.project = self.project
@@ -1093,33 +1312,13 @@ class ComptesWidget(QWidget):
 def open_comptes():
     app = QApplication()
 
-    # account = Account()
-    # account.name = 'Compte Chèque'
-    # account.number = '123456'
-    #
-    # operation1 = Operation()
-    # operation1.date = '02/01/2025'
-    # operation1.label = 'plip plop ploup'
-    # operation1.account = account
-    # operation1.amount = Amount(-15000)
-    #
-    # operation2 = Operation()
-    # operation2.date = '01/01/2025'
-    # operation2.label = 'bim bam boom'
-    # operation2.account = account
-    # operation2.amount = Amount(10000)
-    #
-    # project = Project()
-    # project.accounts.append(account)
-    # project.operations.append(operation1)
-    # project.operations.append(operation2)
+    path = r'G:\Mon Drive\work\mes_comptes\test\mes_comptes.006.project.json'
 
     w = ComptesWidget()
-    # w.project = project
+    w.project = Project.open(path)
     w.reload()
 
     ui = QMainWindow()
-    # ui.setWindowIcon(QIcon(os.path.join(ICON_FOLDER, 'youtube.png')))
     ui.setWindowTitle('Comptes')
     ui.setCentralWidget(w)
     ui.showMaximized()
