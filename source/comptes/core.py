@@ -2,10 +2,12 @@ import csv
 import json
 from datetime import datetime, timedelta
 import re
-
+import os
 
 from .utils import get_number_of_days, json_dumps, random_id, split_date, create_category_pixmap, create_category_icon
 
+
+__dir__ = os.path.dirname(__file__)
 
 class CURRENCIES:
     EUR = 0
@@ -67,6 +69,16 @@ class Project:
 
             category_groups_map[category_group_id] = category_group
 
+        for category_group_data in data['category_groups']:
+            parent_category_group_id = category_group_data.get('parent_category_group.id')
+            parent_category_group = category_groups_map.get(parent_category_group_id)
+
+            category_group_data_id = category_group_data['id']
+            category_group = category_groups_map[category_group_data_id]
+
+            category_group.parent_category_group = parent_category_group
+
+
         categories_map = dict()
         for category_data in data['categories']:
             category_group_id = category_data['category_group.id']
@@ -94,7 +106,11 @@ class Project:
             category_id = operation_data['category.id']
             category = categories_map.get(category_id)
 
+            operation_id = operation_data.get('id')
+
             operation = Operation()
+            if operation_id:
+                operation.id = operation_id
             operation.account = account
             operation.label = operation_data['label']
             operation.amount = amount
@@ -241,6 +257,13 @@ class Project:
 
         return project
 
+    @classmethod
+    def new(cls):
+        file = os.path.join(__dir__, 'data', 'new_project.json')
+        print(file)
+        project = cls.open(file)
+        return project
+
     def import_credit_agricole_csv(self, file, account):
         with open(file, 'r') as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=';')
@@ -317,15 +340,23 @@ class CategoryGroup:
         self.id = random_id()
         self.name = str()
         self.color = 0, 0, 0
+        self.parent_category_group = None
 
     def __str__(self):
         return self.name
 
     def get_data(self):
+        parent_category_group = self.parent_category_group
+        if parent_category_group:
+            parent_category_group_id = parent_category_group.id
+        else:
+            parent_category_group_id = None
+
         data = {
             'id': self.id,
             'name': self.name,
             'color': self.color,
+            'parent_category_group.id': parent_category_group_id,
         }
         return data
 
@@ -351,7 +382,7 @@ class Category:
         self.id = random_id()
         self.name = str()
         self.emoji = str()
-        self.category_group = CategoryGroup()
+        self.category_group = None
         self.keywords = list()
 
     def __str__(self):
@@ -480,18 +511,17 @@ class Account:
         return data
 
 class Operation:
-    
-    MODE_NORMAL = 0
-    MODE_BUDGET = 1
 
     def __init__(self):
+        self.id = random_id()
         self.account = Account()
         self.label = str()
         self.amount = Amount()
         self.category = None
         self.date = str()
         self.note = str()
-        self.mode = self.MODE_NORMAL
+        self.ticked = True
+        self.linked_operation = None
 
     def get_data(self):
         category = self.category
@@ -500,12 +530,20 @@ class Operation:
         else:
             category_id = category.id
 
+        linked_operation = self.linked_operation
+        if linked_operation is None:
+            linked_operation_id = None
+        else:
+            linked_operation_id = linked_operation.id
+
         data = {
-            'account.id': self.account.id,
-            'label': self.label,
-            'amount': self.amount,
-            'category.id': category_id,
+            'id': self.id,
             'date': self.date,
+            'amount': self.amount,
+            'label': self.label,
             'note': self.note,
+            'account.id': self.account.id,
+            'category.id': category_id,
+            'linked_operation.id': linked_operation_id,
         }
         return data

@@ -7,7 +7,6 @@ import string
 from PySide6.QtGui import *
 from PySide6.QtCore import *
 
-
 def random_id():
     return ''.join(random.choice(string.ascii_uppercase) for _ in range(8))
 

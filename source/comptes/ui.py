@@ -45,6 +45,60 @@ class CategoryGroupItem(QTreeWidgetItem):
         self.setIcon(0, icon)
 
 
+class CategoryGroupPicker(QLineEdit):
+
+    def __init__(self):
+        super().__init__()
+
+        self.project = None
+        self.selected_category_group = None
+
+        self.setReadOnly(True)
+
+        self.menu = QMenu()
+
+    def set_category_group_selected(self, category_group):
+        if category_group is None:
+            label = ''
+        else:
+            label = category_group.name
+
+        self.setText(label)
+        self.selected_category_group = category_group
+
+    def reload(self):
+        self.menu = QMenu()
+
+        reset_action = QAction(self)
+        reset_action.setText('None')
+        reset_action.triggered.connect(
+            partial(
+                self.set_category_group_selected,
+                None
+            )
+        )
+        self.menu.addAction(reset_action)
+
+        for category_group in self.project.category_groups:
+            category_group_action = QAction(self)
+            category_group_action.setIcon(category_group.get_icon(16))
+            category_group_action.setText(category_group.name)
+            category_group_action.triggered.connect(
+                partial(
+                    self.set_category_group_selected,
+                    category_group
+                )
+            )
+
+            self.menu.addAction(category_group_action)
+
+
+    def mousePressEvent(self, event):
+        local_point = QPoint(0, self.height())
+        world_point = self.mapToGlobal(local_point)
+        self.menu.exec_(world_point)
+
+
 class CategoryPicker(QLineEdit):
 
     def __init__(self):
@@ -109,6 +163,7 @@ class CategoryGroupEditor(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
 
+        self.project = None
         self.category_group = CategoryGroup()
 
         self.setWindowTitle('Category Group Editor')
@@ -128,6 +183,8 @@ class CategoryGroupEditor(QDialog):
 
         self.color_preview = QLabel()
 
+        self.parent_category_group_picker = CategoryGroupPicker()
+
         color_layout = QHBoxLayout()
         color_layout.addWidget(self.color_preview)
         color_layout.addWidget(self.r_spin)
@@ -140,6 +197,7 @@ class CategoryGroupEditor(QDialog):
         form_layout = QFormLayout()
         form_layout.addRow('Name', self.name_line)
         form_layout.addRow('Color', color_layout)
+        form_layout.addRow('Parent', self.parent_category_group_picker)
 
         ok_btn = QPushButton('Ok')
         ok_btn.clicked.connect(self.validate)
@@ -167,6 +225,8 @@ class CategoryGroupEditor(QDialog):
 
         self.category_group.name = name
         self.category_group.color = r, g, b
+        self.category_group.parent_category_group = self.parent_category_group_picker.selected_category_group
+        print(self.category_group.parent_category_group)
 
         self.accept()
 
@@ -183,8 +243,13 @@ class CategoryGroupEditor(QDialog):
     def reload(self):
         name = self.category_group.name
         r, g, b = self.category_group.color
+        category_group = self.category_group.parent_category_group
 
         self.name_line.setText(name)
+
+        self.parent_category_group_picker.project = self.project
+        self.parent_category_group_picker.set_category_group_selected(category_group)
+        self.parent_category_group_picker.reload()
 
         self.r_spin.setValue(r)
         self.g_spin.setValue(g)
@@ -198,7 +263,7 @@ class CategoryEditor(QDialog):
         super().__init__(parent)
 
         self.category = Category()
-        self.category_groups = list()
+        self.project = None
 
         self.setWindowTitle('Category Editor')
         self.resize(300, 300)
@@ -209,7 +274,6 @@ class CategoryEditor(QDialog):
         self.category_group_combo = QComboBox()
 
         self.emoji_line = QLineEdit()
-        self.emoji_line.setPlaceholderText('🪙')
 
         self.keywords_text = QTextEdit()
         self.keywords_text.setPlaceholderText('keyword1\nkeyword2\nkeyword3\n...')
@@ -266,7 +330,7 @@ class CategoryEditor(QDialog):
 
         selected_index = -1
         self.category_group_combo.clear()
-        for index, cat_grp in enumerate(self.category_groups):
+        for index, cat_grp in enumerate(self.project.category_groups):
             if category_group is cat_grp:
                 selected_index = index
             self.category_group_combo.addItem(str(cat_grp), userData=cat_grp)
@@ -283,23 +347,15 @@ class CategoryView(QDialog):
         self.setWindowTitle('Category View')
         self.resize(600, 600)
 
-        self.category_group_tree = QTreeWidget()
-        self.category_group_tree.setIconSize(QSize(32, 32))
-        self.category_group_tree.setHeaderLabel('Category Group')
-
         self.category_tree = QTreeWidget()
         self.category_tree.setIconSize(QSize(32, 32))
-        self.category_tree.setHeaderLabel('Category')
+        self.category_tree.setHeaderHidden(True)
 
         tree_layout = QHBoxLayout()
-        tree_layout.addWidget(self.category_group_tree)
         tree_layout.addWidget(self.category_tree)
 
-        edit_selected_category_group_action = QAction('Edit Selected Category Group', self)
-        edit_selected_category_group_action.triggered.connect(self.edit_selected_category_group)
-
-        edit_selected_category_action = QAction('Edit Selected Category', self)
-        edit_selected_category_action.triggered.connect(self.edit_selected_category)
+        edit_selected_category_group_action = QAction('Edit Selected Item', self)
+        edit_selected_category_group_action.triggered.connect(self.edit_selected_item)
 
         create_category_group_action = QAction('Create Category Group', self)
         create_category_group_action.triggered.connect(self.create_category_group)
@@ -308,7 +364,6 @@ class CategoryView(QDialog):
         create_category_action.triggered.connect(self.create_category)
 
         edit_menu = QMenu('Edit')
-        edit_menu.addAction(edit_selected_category_action)
         edit_menu.addAction(edit_selected_category_group_action)
 
         create_menu = QMenu('Create')
@@ -322,20 +377,6 @@ class CategoryView(QDialog):
         main_layout = QVBoxLayout(self)
         main_layout.setMenuBar(menu_bar)
         main_layout.addLayout(tree_layout)
-
-    def get_selected_category_group(self):
-        selected_items = self.category_group_tree.selectedItems()
-
-        if not selected_items:
-            return None
-
-        selected_item = selected_items[0]
-
-        if not isinstance(selected_item, CategoryGroupItem):
-            return None
-
-        category_group = selected_item.category_group
-        return category_group
 
     def get_selected_category(self):
         selected_items = self.category_tree.selectedItems()
@@ -351,34 +392,26 @@ class CategoryView(QDialog):
         category = selected_item.category
         return category
 
-    def edit_selected_category_group(self):
-        category_group = self.get_selected_category_group()
+    def edit_selected_item(self):
+        selected_items = self.category_tree.selectedItems()
 
-        if category_group is None:
-            raise Exception('No category group selected')
+        if not selected_items:
+            raise Exception('No item selected')
 
-        editor = CategoryGroupEditor(self)
-        editor.category_group = category_group
-        editor.reload()
+        selected_item = selected_items[0]
 
-        proceed = editor.exec()
-
-        if not proceed:
-            print('Operation Canceled')
-            return
-
-        self.reload()
-
-    def edit_selected_category(self):
-        category = self.get_selected_category()
-
-        if category is None:
-            raise Exception('No category selected')
-
-        editor = CategoryEditor(self)
-        editor.category = category
-        editor.category_groups = self.project.category_groups
-        editor.reload()
+        if isinstance(selected_item, CategoryItem):
+            editor = CategoryEditor(self)
+            editor.project = self.project
+            editor.category = selected_item.category
+            editor.reload()
+        elif isinstance(selected_item, CategoryGroupItem):
+            editor = CategoryGroupEditor(self)
+            editor.project = self.project
+            editor.category_group = selected_item.category_group
+            editor.reload()
+        else:
+            raise Exception('Invalid selection')
 
         proceed = editor.exec()
 
@@ -390,6 +423,7 @@ class CategoryView(QDialog):
 
     def create_category_group(self):
         editor = CategoryGroupEditor(self)
+        editor.project = self.project
         editor.reload()
 
         proceed = editor.exec()
@@ -404,7 +438,7 @@ class CategoryView(QDialog):
 
     def create_category(self):
         editor = CategoryEditor(self)
-        editor.category_groups = self.project.category_groups
+        editor.project = self.project
         editor.reload()
 
         proceed = editor.exec()
@@ -418,15 +452,30 @@ class CategoryView(QDialog):
         self.reload()
 
     def reload(self):
-        self.category_group_tree.clear()
+        self.category_tree.clear()
+
+        category_group_items_map = dict()
         for category_group in self.project.category_groups:
             item = CategoryGroupItem(category_group)
-            self.category_group_tree.addTopLevelItem(item)
+            category_group_items_map[category_group.id] = item
 
-        self.category_tree.clear()
+        for category_group in self.project.category_groups:
+            category_group_item = category_group_items_map[category_group.id]
+            parent_category_group = category_group.parent_category_group
+
+            if not parent_category_group:
+                self.category_tree.addTopLevelItem(category_group_item)
+            else:
+                parent_category_group_item = category_group_items_map[parent_category_group.id]
+                parent_category_group_item.addChild(category_group_item)
+
         for category in self.project.categories:
             item = CategoryItem(category)
-            self.category_tree.addTopLevelItem(item)
+
+            category_group_id = category.category_group.id
+
+            category_group_item = category_group_items_map[category_group_id]
+            category_group_item.addChild(item)
 
 
 class AccountEditor(QDialog):
@@ -737,95 +786,25 @@ class OperationsTree(QTreeWidget):
             self.addTopLevelItem(tree_item)
 
 
-class CategoryGroupSummaryItem(QTreeWidgetItem):
-
-    def __init__(self):
-        super().__init__()
-
-        self.category_group = None
-
-        self.project = None
-
-        self.selected_account = None
-        self.selected_year = None
-
-    def reload(self):
-        self.setText(0, self.category_group.name)
-        self.setIcon(0, self.category_group.get_icon(16))
-
-        year_sum = Amount()
-        for index in range(12):
-            month = index + 1
-            month_year_formatted = f'{month:02d}/{self.selected_year}'
-
-            # operations
-            operations = self.project.operations
-            operations = [x for x in operations if x.account is self.selected_account]
-            operations = [x for x in operations if x.date.endswith(month_year_formatted)]
-            operations = [x for x in operations if x.category and x.category.category_group is self.category_group]
-
-            # amount
-            month_sum = Amount()
-            for operation in operations:
-                month_sum.int += operation.amount.int
-
-            year_sum.int += month_sum.int
-
-            self.setText(month, str(month_sum))
-
-            # color
-            if month_sum.int > 0:
-                color = Qt.GlobalColor.darkGreen
-            elif month_sum.int < 0:
-                color = Qt.GlobalColor.red
-            else:
-                color = Qt.GlobalColor.lightGray
-
-            self.setForeground(month, QColor(color))
-
-        # year
-        self.setText(13, str(year_sum))
-
-        # color
-        if year_sum.int > 0:
-            color = Qt.GlobalColor.darkGreen
-        elif year_sum.int < 0:
-            color = Qt.GlobalColor.red
-        else:
-            color = Qt.GlobalColor.lightGray
-
-        self.setForeground(13, QColor(color))
-
-
 class CategorySummaryItem(QTreeWidgetItem):
 
     def __init__(self):
         super().__init__()
 
-        self.project = None
-        self.category = None
-
-        self.selected_account = None
-        self.selected_year = None
+        self.operations = list()
 
     def reload(self):
-        self.setText(0, self.category.name)
-        self.setIcon(0, self.category.get_icon(16))
-
         year_sum = Amount()
         for index in range(12):
             month = index + 1
-            month_year_formatted = f'{month:02d}/{self.selected_year}'
+            month_formatted = f'{month:02d}'
 
-            # operations
-            operations = self.project.operations
-            operations = [x for x in operations if x.account is self.selected_account]
-            operations = [x for x in operations if x.date.endswith(month_year_formatted)]
-            operations = [x for x in operations if x.category is self.category]
+            month_operations = self.operations
+            month_operations = [x for x in month_operations if split_date(x.date)['month'] == month_formatted]
 
             # amount
             month_amount = Amount()
-            for operation in operations:
+            for operation in month_operations:
                 month_amount.int += operation.amount.int
 
             year_sum.int += month_amount.int
@@ -836,11 +815,12 @@ class CategorySummaryItem(QTreeWidgetItem):
             if month_amount.int > 0:
                 color = Qt.GlobalColor.darkGreen
             elif month_amount.int < 0:
-                color = Qt.GlobalColor.red
+                color = None
             else:
                 color = Qt.GlobalColor.lightGray
 
-            self.setForeground(month, QColor(color))
+            if color:
+                self.setForeground(month, QColor(color))
 
         # year
         self.setText(13, str(year_sum))
@@ -849,12 +829,12 @@ class CategorySummaryItem(QTreeWidgetItem):
         if year_sum.int > 0:
             color = Qt.GlobalColor.darkGreen
         elif year_sum.int < 0:
-            color = Qt.GlobalColor.red
+            color = None
         else:
             color = Qt.GlobalColor.lightGray
 
-        self.setForeground(13, QColor(color))
-
+        if color:
+            self.setForeground(13, QColor(color))
 
 
 class CategorySummaryTree(QTreeWidget):
@@ -901,29 +881,42 @@ class CategorySummaryTree(QTreeWidget):
             print('No project found')
             return
 
+        account_operations = [x for x in self.project.operations if x.account is self.selected_account]
+        year_operations = [x for x in account_operations if split_date(x.date)['year'] == self.selected_year]
+
+        balance_item = CategorySummaryItem()
+        balance_item.setText(0, 'Balance')
+        balance_item.operations = year_operations
+        balance_item.reload()
+        self.addTopLevelItem(balance_item)
+
         category_group_item_map = dict()
         for category_group in self.project.category_groups:
-            category_group_summary_item = CategoryGroupSummaryItem()
-            category_group_summary_item.category_group = category_group
-            category_group_summary_item.project = self.project
-            category_group_summary_item.selected_account = self.selected_account
-            category_group_summary_item.selected_year = self.selected_year
-            category_group_summary_item.reload()
+            category_group_operations = [x for x in year_operations if x.category and x.category.category_group is category_group]
 
-            category_group_item_map[category_group.id] = category_group_summary_item
+            category_group_item = CategorySummaryItem()
+            category_group_item.setText(0, category_group.name)
+            category_group_item.setIcon(0, category_group.get_icon(16))
 
-            self.addTopLevelItem(category_group_summary_item)
+            category_group_item.operations = category_group_operations
+            category_group_item.reload()
+
+            category_group_item_map[category_group.id] = category_group_item
+
+            self.addTopLevelItem(category_group_item)
 
         for category in self.project.categories:
-            category_summary_item = CategorySummaryItem()
-            category_summary_item.category = category
-            category_summary_item.project = self.project
-            category_summary_item.selected_account = self.selected_account
-            category_summary_item.selected_year = self.selected_year
-            category_summary_item.reload()
+            category_operations = [x for x in year_operations if x.category is category]
+
+            category_item = CategorySummaryItem()
+            category_item.setText(0, category.name)
+            category_item.setIcon(0, category.get_icon(16))
+
+            category_item.operations = category_operations
+            category_item.reload()
 
             category_group_item = category_group_item_map[category.category_group.id]
-            category_group_item.addChild(category_summary_item)
+            category_group_item.addChild(category_item)
 
 
 class ComptesWidget(QWidget):
@@ -931,7 +924,11 @@ class ComptesWidget(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.project = Project()
+        self.project = None
+        self.current_file = None
+
+        # open recent
+        self.open_recent_projects_menu = QMenu('Open Recent')
 
         # account_combo
         self.account_combo = QComboBox()
@@ -977,42 +974,86 @@ class ComptesWidget(QWidget):
 
         self.setLayout(main_layout)
 
-    def save_as_project(self):
-        path, flt = QFileDialog.getSaveFileName(self)
+        # new project
+        self.new_project()
 
-        if not path:
+    def ask_save_project(self):
+        if not self.current_file:
+            self.ask_save_as_project()
+        else:
+            file = self.current_file
+            self.save_project(file)
+
+    def ask_save_as_project(self):
+        file, flt = QFileDialog.getSaveFileName(self)
+
+        if not file:
             print('Operation canceled')
             return
 
-        self.project.save(path)
-        print(f'File saved at {path!r}')
+        self.save_project(file)
 
-    def new_project(self):
-        reply = QMessageBox.question(
+    def save_project(self, file):
+        self.project.save(file)
+        self.current_file = file
+        self.reload()
+        print(f'File saved at {file!r}')
+
+    def ask_new_project(self):
+        proceed = QMessageBox.question(
             self,
             'New Project',
             'This is not undoable. Are you sure?',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
 
-        if reply != QMessageBox.StandardButton.Yes:
+        if proceed != QMessageBox.StandardButton.Yes:
+            print('Operation Canceled')
+            return
+        
+        self.new_project()
+        
+    def new_project(self):
+        self.project = Project.new()
+        self.current_file = None
+        self.reload()
+    
+    def ask_open_recent_project(self, file):
+        proceed = QMessageBox.question(
+            self,
+            'Open Project',
+            'This is not undoable. Are you sure?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if proceed != QMessageBox.StandardButton.Yes:
             print('Operation Canceled')
             return
 
-        self.project = Project()
-
+        self.open_project(file)
+    
+    def reload_window_title(self):
+        s = 'Comptes'
+        if self.current_file is None:
+            s += ' - New Project'
+        else:
+            s+= f' - {self.current_file}'
+            
+        self.setWindowTitle(s)
+    
+    def open_project(self, file):
+        self.project = Project.open(file)
+        self.current_file = file
         self.reload()
+    
+    def ask_open_project(self):
+        file, flt = QFileDialog.getOpenFileName(self)
 
-    def open_project(self):
-        path, flt = QFileDialog.getOpenFileName(self)
-
-        if not path:
+        if not file:
             print('Operation canceled')
             return
 
-        self.project = Project.open(path)
-
-        self.reload()
+        self.open_project(file)
 
     def import_credit_agricole_csv(self):
         account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
@@ -1034,17 +1075,21 @@ class ComptesWidget(QWidget):
         print_json(self.project)
 
     def get_menu_bar(self):
-        save_as_project_action = QAction('Save as', self)
-        save_as_project_action.setShortcut('Ctrl+S')
-        save_as_project_action.triggered.connect(self.save_as_project)
+        ask_save_as_project_action = QAction('Save as', self)
+        ask_save_as_project_action.setShortcut('Ctrl+Shift+S')
+        ask_save_as_project_action.triggered.connect(self.ask_save_as_project)
 
-        open_project_action = QAction('Open', self)
-        open_project_action.setShortcut('Ctrl+O')
-        open_project_action.triggered.connect(self.open_project)
+        ask_save_project_action = QAction('Save', self)
+        ask_save_project_action.setShortcut('Ctrl+S')
+        ask_save_project_action.triggered.connect(self.ask_save_project)
 
-        new_project_action = QAction('New', self)
-        new_project_action.setShortcut('Ctrl+N')
-        new_project_action.triggered.connect(self.new_project)
+        ask_open_project_action = QAction('Open', self)
+        ask_open_project_action.setShortcut('Ctrl+O')
+        ask_open_project_action.triggered.connect(self.ask_open_project)
+
+        ask_new_project_action = QAction('New', self)
+        ask_new_project_action.setShortcut('Ctrl+N')
+        ask_new_project_action.triggered.connect(self.ask_new_project)
 
         print_project_action = QAction('Print', self)
         print_project_action.triggered.connect(self.print_project)
@@ -1056,12 +1101,18 @@ class ComptesWidget(QWidget):
         import_menu.addAction(import_ca_action)
 
         file_menu = QMenu('File')
-        file_menu.addAction(open_project_action)
-        file_menu.addAction(save_as_project_action)
-        file_menu.addAction(new_project_action)
+        file_menu.addAction(ask_new_project_action)
         file_menu.addSeparator()
+
+        file_menu.addAction(ask_save_project_action)
+        file_menu.addAction(ask_save_as_project_action)
+        file_menu.addSeparator()
+
+        file_menu.addAction(ask_open_project_action)
+        file_menu.addMenu(self.open_recent_projects_menu)
         file_menu.addMenu(import_menu)
         file_menu.addSeparator()
+
         file_menu.addAction(print_project_action)
 
         guess_category_on_selected_operations_act = QAction('Guess Category on Selected Operations', self)
@@ -1123,7 +1174,6 @@ class ComptesWidget(QWidget):
                 operation.category = new_category
 
         self.reload()
-
 
     def edit_categories(self):
         category_view = CategoryView(self)
@@ -1208,11 +1258,33 @@ class ComptesWidget(QWidget):
         self.reload()
 
     def reload_children(self):
+        self.reload_window_title()
         self.reload_category_summary_tree()
         self.reload_monthly_table()
         self.reload_operations_tree()
         self.reload_selection_info_label()
         self.reload_account_info_label()
+        self.reload_recent_projects()
+
+    def reload_recent_projects(self):
+        self.open_recent_projects_menu.clear()
+
+        files = [
+            r'G:\Mon Drive\work\mes_comptes\test\mes_comptes.007.project.json',
+            r'G:\Mon Drive\work\mes_comptes\test\mes_comptes.006.project.json'
+        ]
+
+        for file in files:
+            file_name = os.path.basename(file)
+            
+            file_action = QAction(self)
+            file_action.setText(file_name)
+            file_action.triggered.connect(
+                partial(
+                    self.ask_open_recent_project,
+                    file)
+            )
+            self.open_recent_projects_menu.addAction(file_action)
 
     def reload_category_summary_tree(self):
         self.category_summary_tree.project = self.project
@@ -1312,16 +1384,15 @@ class ComptesWidget(QWidget):
 def open_comptes():
     app = QApplication()
 
-    path = r'G:\Mon Drive\work\mes_comptes\test\mes_comptes.006.project.json'
-
     w = ComptesWidget()
-    w.project = Project.open(path)
     w.reload()
-
+    
     ui = QMainWindow()
-    ui.setWindowTitle('Comptes')
     ui.setCentralWidget(w)
     ui.showMaximized()
     ui.setMenuBar(w.get_menu_bar())
+
+    w.windowTitleChanged.connect(ui.setWindowTitle)
+    w.windowTitleChanged.emit(w.windowTitle())
 
     app.exec_()

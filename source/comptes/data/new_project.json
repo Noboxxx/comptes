@@ -1,0 +1,359 @@
+{
+  "operations": [],
+  "accounts": [
+    {
+      "id": "ZTBMKRWT",
+      "name": "My Account",
+      "number": "###"
+    }
+  ],
+  "categories": [
+    {
+      "id": "VVAEIVRU",
+      "name": "Abonnements",
+      "emoji": "☎️",
+      "category_group.id": "GBQNEABC",
+      "keywords": [
+        "offre premium",
+        "youtube",
+        "google one",
+        "sfr",
+        "orange"
+      ]
+    },
+    {
+      "id": "CWAVQUMS",
+      "name": "Courses",
+      "emoji": "🛒",
+      "category_group.id": "GBQNEABC",
+      "keywords": [
+        "intermarche",
+        "leclerc",
+        "lidl"
+      ]
+    },
+    {
+      "id": "AQWSMRRK",
+      "name": "Loisirs",
+      "emoji": "🎳",
+      "category_group.id": "GBQNEABC",
+      "keywords": [
+        "helloasso",
+        "google play"
+      ]
+    },
+    {
+      "id": "KSYSNSIW",
+      "name": "Bar / Resto",
+      "emoji": "🍴",
+      "category_group.id": "GBQNEABC",
+      "keywords": [
+        "mc donald",
+        "tacos"
+      ]
+    },
+    {
+      "id": "UKUNCRMP",
+      "name": "Achat",
+      "emoji": "🛍️",
+      "category_group.id": "GBQNEABC",
+      "keywords": []
+    },
+    {
+      "id": "OTUAKABW",
+      "name": "Autre",
+      "emoji": "❔",
+      "category_group.id": "GBQNEABC",
+      "keywords": []
+    },
+    {
+      "id": "UNDPFUBF",
+      "name": "Salaire",
+      "emoji": "💵",
+      "category_group.id": "OMVVKICK",
+      "keywords": [
+        "xilam",
+        "2 minutes",
+        "ellipse"
+      ]
+    },
+    {
+      "id": "PAHPGYUC",
+      "name": "Chômage",
+      "emoji": "💵",
+      "category_group.id": "OMVVKICK",
+      "keywords": [
+        "france travail",
+        "chomage",
+        "pole emploi"
+      ]
+    },
+    {
+      "id": "ZMVPFQUA",
+      "name": "Congés Spectacles",
+      "emoji": "💵",
+      "category_group.id": "OMVVKICK",
+      "keywords": [
+        "conges spectacles"
+      ]
+    },
+    {
+      "id": "UOVAFNYF",
+      "name": "Prêt",
+      "emoji": "📃",
+      "category_group.id": "CENPAYVH",
+      "keywords": [
+        "ALS ACTION LOGEMENT SERVICES",
+        "ASSU. CAAE PRET HABITAT",
+        "10001058113 ECHEANCE",
+        "10001058114 ECHEANCE"
+      ]
+    },
+    {
+      "id": "KSHMOYXQ",
+      "name": "Charges",
+      "emoji": "⚡",
+      "category_group.id": "CENPAYVH",
+      "keywords": [
+        "ELECTRICITE DE FRANCE",
+        "SPL SEMEA",
+        "CRCAM CHARENTE PERIGORD"
+      ]
+    },
+    {
+      "id": "SEIRXSYL",
+      "name": "Copro",
+      "emoji": "🏘️",
+      "category_group.id": "CENPAYVH",
+      "keywords": [
+        "RESIDENCE MAIN",
+        "MAINTENON"
+      ]
+    },
+    {
+      "id": "YLIEMRNR",
+      "name": "Amménagement",
+      "emoji": "📺",
+      "category_group.id": "CENPAYVH",
+      "keywords": [
+        "ikea"
+      ]
+    },
+    {
+      "id": "HWRUQFEV",
+      "name": "Travaux",
+      "emoji": "🔨",
+      "category_group.id": "CENPAYVH",
+      "keywords": [
+        "CASTORAMA"
+      ]
+    },
+    {
+      "id": "RVTDZQXD",
+      "name": "Autre",
+      "emoji": "❔",
+      "category_group.id": "CENPAYVH",
+      "keywords": []
+    },
+    {
+      "id": "ZMAARDVB",
+      "name": "Essence",
+      "emoji": "⛽",
+      "category_group.id": "YVAIJAMY",
+      "keywords": [
+        "SAJON DAC",
+        "DAC Carrefour",
+        "UEP*SUPER U"
+      ]
+    },
+    {
+      "id": "TVFNAPKZ",
+      "name": "Assurance",
+      "emoji": "📃",
+      "category_group.id": "YVAIJAMY",
+      "keywords": [
+        "MMA IARD SA"
+      ]
+    },
+    {
+      "id": "CKELLKOE",
+      "name": "Garage",
+      "emoji": "🔧",
+      "category_group.id": "YVAIJAMY",
+      "keywords": [
+        "GARAGE MICHAUD ANGOU"
+      ]
+    },
+    {
+      "id": "HVLYCPTF",
+      "name": "Transports en Commun",
+      "emoji": "🚂",
+      "category_group.id": "YVAIJAMY",
+      "keywords": [
+        "sncf",
+        "navigo",
+        "ratp"
+      ]
+    },
+    {
+      "id": "NUEDGKTW",
+      "name": "Impôts sur les Revenus",
+      "emoji": "🏛️",
+      "category_group.id": "SRIHECEX",
+      "keywords": []
+    },
+    {
+      "id": "XQZUCZJD",
+      "name": "Impôts fonciers",
+      "emoji": "🏛️",
+      "category_group.id": "SRIHECEX",
+      "keywords": []
+    },
+    {
+      "id": "VNVZNXQW",
+      "name": "Mutuelle",
+      "emoji": "⚕️",
+      "category_group.id": "SYYBGTQP",
+      "keywords": [
+        "AUDIENS SANTE PREVOYANCE"
+      ]
+    },
+    {
+      "id": "ZRRDNLHU",
+      "name": "Consultation",
+      "emoji": "🩺",
+      "category_group.id": "SYYBGTQP",
+      "keywords": []
+    },
+    {
+      "id": "JZWLYWZU",
+      "name": "Autre",
+      "emoji": "❔",
+      "category_group.id": "SYYBGTQP",
+      "keywords": []
+    },
+    {
+      "id": "RUVUEVDD",
+      "name": "Autre",
+      "emoji": "❔",
+      "category_group.id": "YVAIJAMY",
+      "keywords": []
+    },
+    {
+      "id": "YDIJOMRV",
+      "name": "Livret A",
+      "emoji": "🪙",
+      "category_group.id": "XZYXGAKA",
+      "keywords": [
+        "#80030244684"
+      ]
+    },
+    {
+      "id": "CDGFXOKZ",
+      "name": "PEA",
+      "emoji": "🪙",
+      "category_group.id": "XZYXGAKA",
+      "keywords": [
+        "#80030244749"
+      ]
+    },
+    {
+      "id": "HNIAITMJ",
+      "name": "LEP",
+      "emoji": "🪙",
+      "category_group.id": "XZYXGAKA",
+      "keywords": [
+        "WEB MONSIEUR LAURENT PIERRE"
+      ]
+    },
+    {
+      "id": "CBFOPSFY",
+      "name": "eToro",
+      "emoji": "🪙",
+      "category_group.id": "XZYXGAKA",
+      "keywords": []
+    },
+    {
+      "id": "VWUGUTRE",
+      "name": "Remboursement",
+      "emoji": "💵",
+      "category_group.id": "OMVVKICK",
+      "keywords": []
+    },
+    {
+      "id": "YXCQHZYR",
+      "name": "Retrait",
+      "emoji": "💰",
+      "category_group.id": "GBQNEABC",
+      "keywords": [
+        "retrait"
+      ]
+    }
+  ],
+  "category_groups": [
+    {
+      "id": "OMVVKICK",
+      "name": "Revenus",
+      "color": [
+        0,
+        255,
+        0
+      ]
+    },
+    {
+      "id": "XZYXGAKA",
+      "name": "Investissement",
+      "color": [
+        255,
+        255,
+        0
+      ]
+    },
+    {
+      "id": "GBQNEABC",
+      "name": "Courant",
+      "color": [
+        255,
+        50,
+        50
+      ]
+    },
+    {
+      "id": "CENPAYVH",
+      "name": "Habitation",
+      "color": [
+        255,
+        155,
+        0
+      ]
+    },
+    {
+      "id": "YVAIJAMY",
+      "name": "Transport",
+      "color": [
+        0,
+        150,
+        255
+      ]
+    },
+    {
+      "id": "SRIHECEX",
+      "name": "Impôts",
+      "color": [
+        255,
+        220,
+        100
+      ]
+    },
+    {
+      "id": "SYYBGTQP",
+      "name": "Santé",
+      "color": [
+        255,
+        100,
+        200
+      ]
+    }
+  ],
+  "version": "1"
+}
