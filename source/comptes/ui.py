@@ -551,7 +551,10 @@ class OperationEditor(QDialog):
 
         self.category_picker = CategoryPicker()
 
+        self.is_budget_check = QCheckBox()
+
         form_layout = QFormLayout()
+        form_layout.addRow('is Budget', self.is_budget_check)
         form_layout.addRow('Account', self.account_combo)
         form_layout.addRow('Date', self.date_line)
         form_layout.addRow('Label', self.label_line)
@@ -580,7 +583,7 @@ class OperationEditor(QDialog):
         label = self.label_line.toPlainText()
         amount = Amount.from_float(self.amount_spin.value())
         category = self.category_picker.selected_category
-        print('validate → category', category, type(category))
+        is_budget = self.is_budget_check.isChecked()
 
         date = self.date_line.text()
         note = ''
@@ -591,6 +594,7 @@ class OperationEditor(QDialog):
         self.operation.category = category
         self.operation.date = date
         self.operation.note = note
+        self.operation.is_budget = is_budget
 
         self.accept()
 
@@ -601,6 +605,7 @@ class OperationEditor(QDialog):
         category = self.operation.category
         date = self.operation.date
         note = self.operation.note
+        is_budget = self.operation.is_budget
 
         selected_index = -1
         self.account_combo.clear()
@@ -617,6 +622,7 @@ class OperationEditor(QDialog):
         self.label_line.setText(label)
         self.amount_spin.setValue(amount.as_unit())
         self.date_line.setText(date)
+        self.is_budget_check.setChecked(is_budget)
 
 
 class MonthlyTable(QTableWidget):
@@ -731,6 +737,11 @@ class OperationItem(QTreeWidgetItem):
         # amount
         self.setText(2, str(self.operation.amount))
 
+        # is budget
+        if self.operation.is_budget:
+            for index in range(len(OperationsTree.HEADERS_LABEL)):
+                self.setBackground(index, QBrush(QColor(255, 255, 0, 25)))
+                self.setForeground(index, QBrush(QColor(100, 100, 0)))
 
 class OperationsTree(QTreeWidget):
 
@@ -884,6 +895,7 @@ class CategorySummaryTree(QTreeWidget):
         account_operations = [x for x in self.project.operations if x.account is self.selected_account]
         year_operations = [x for x in account_operations if split_date(x.date)['year'] == self.selected_year]
 
+        # balance item
         balance_item = CategorySummaryItem()
         balance_item.setText(0, 'Balance')
         balance_item.operations = year_operations
@@ -892,7 +904,8 @@ class CategorySummaryTree(QTreeWidget):
 
         category_group_item_map = dict()
         for category_group in self.project.category_groups:
-            category_group_operations = [x for x in year_operations if x.category and x.category.category_group is category_group]
+            category_group_categories = self.project.get_categories(category_group)
+            category_group_operations = [x for x in year_operations if x.category in category_group_categories]
 
             category_group_item = CategorySummaryItem()
             category_group_item.setText(0, category_group.name)
@@ -903,7 +916,15 @@ class CategorySummaryTree(QTreeWidget):
 
             category_group_item_map[category_group.id] = category_group_item
 
-            self.addTopLevelItem(category_group_item)
+        for category_group in self.project.category_groups:
+            category_group_item = category_group_item_map[category_group.id]
+            parent_category_group = category_group.parent_category_group
+
+            if parent_category_group:
+                parent_category_group_item = category_group_item_map[parent_category_group.id]
+                parent_category_group_item.addChild(category_group_item)
+            else:
+                self.addTopLevelItem(category_group_item)
 
         for category in self.project.categories:
             category_operations = [x for x in year_operations if x.category is category]
@@ -917,6 +938,22 @@ class CategorySummaryTree(QTreeWidget):
 
             category_group_item = category_group_item_map[category.category_group.id]
             category_group_item.addChild(category_item)
+
+        # undefined category
+        undefined_category_operations = [x for x in year_operations if x.category is None]
+
+        category_icon = create_category_icon(
+            text='❔',
+            color=(100, 100, 100),
+            radius=16,
+        )
+
+        undefined_category_item = CategorySummaryItem()
+        undefined_category_item.setText(0, 'Undefined')
+        undefined_category_item.setIcon(0, category_icon)
+        undefined_category_item.operations = undefined_category_operations
+        undefined_category_item.reload()
+        self.addTopLevelItem(undefined_category_item)
 
 
 class ComptesWidget(QWidget):

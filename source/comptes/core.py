@@ -117,6 +117,7 @@ class Project:
             operation.category = category
             operation.date = operation_data['date']
             operation.note = operation_data['note']
+            operation.is_budget = operation_data.get('is_budget', False)
 
             operations.append(operation)
 
@@ -297,6 +298,18 @@ class Project:
                 operations.append(operation)
 
         self.operations += operations
+
+    def get_categories(self, category_group):
+        categories = list()
+
+        for category in self.categories:
+            category_parents = get_category_parents(category)
+            print(category, category_parents)
+
+            if category_group in category_parents:
+                categories.append(category)
+
+        return categories
 
 class Date:
 
@@ -520,7 +533,7 @@ class Operation:
         self.category = None
         self.date = str()
         self.note = str()
-        self.ticked = True
+        self.is_budget = False
         self.linked_operation = None
 
     def get_data(self):
@@ -545,5 +558,23 @@ class Operation:
             'account.id': self.account.id,
             'category.id': category_id,
             'linked_operation.id': linked_operation_id,
+            'is_budget': self.is_budget,
         }
         return data
+
+def get_category_parents(item, data=None):
+    if data is None:
+        data = list()
+
+    if isinstance(item, Category):
+        parent = item.category_group
+    elif isinstance(item, CategoryGroup):
+        parent = item.parent_category_group
+    else:
+        raise Exception(f'Item type {type(item)} not supported')
+
+    if parent:
+        data.append(parent)
+        get_category_parents(parent, data=data)
+
+    return data

@@ -1,10 +1,5 @@
 TODO:
     - display error
-    - créer des catégories
-    - table des categories par mois et par an
-    - éditer un compte
-    - éditer une opération
-    - éditer une catégorie
     - façon de faire des prévisions
     - graph de tous les comptes
 FIX:
