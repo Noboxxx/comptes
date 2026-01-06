@@ -743,6 +743,9 @@ class OperationItem(QTreeWidgetItem):
 
         self.operation = Operation()
 
+        self.default_brush = self.foreground(0)
+        self.green_brush = QColor(*COLORS.GREEN)
+
         for index in range(len(OperationsTree.HEADERS_LABEL)):
             self.setSizeHint(index, QSize(0, 50))
 
@@ -773,6 +776,13 @@ class OperationItem(QTreeWidgetItem):
 
         # amount
         self.setText(2, str(self.operation.amount))
+
+        if self.operation.amount.int > 0:
+            brush = QBrush(self.green_brush)
+        else:
+            brush = self.default_brush
+
+        self.setForeground(2, brush)
 
         # is budget
         if self.operation.is_budget:
@@ -825,7 +835,8 @@ class OperationsTree(QTreeWidget):
     def reload(self):
         self.clear()
 
-        operations = sorted(self.project.operations, key=lambda x: x.date)
+        operations = reversed(sorted(self.project.operations, key=lambda x: x.date))
+
 
         for operation in operations:
             if str(operation.date.year()) != self.selected_year:
