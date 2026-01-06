@@ -1,13 +1,61 @@
 import csv
-import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import re
 import os
 
-from .utils import get_number_of_days, json_dumps, random_id, split_date, create_category_pixmap, create_category_icon
-
+from PySide6.QtCore import *
+from .utils import get_number_of_days, random_id, create_category_pixmap, create_category_icon, \
+    json_dump, json_load
 
 __dir__ = os.path.dirname(__file__)
+
+class Settings:
+
+    def __init__(self):
+        self.file = None
+        self.recent_files = list()
+        self.recent_files_limit = 10
+
+    def reload(self):
+        if not os.path.isfile(self.file):
+            return
+
+        data = json_load(self.file)
+
+        self.recent_files = data['recent_files']
+
+    def save(self):
+        if self.file is None:
+            raise Exception('No file registered')
+
+        directory = os.path.dirname(self.file)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        json_dump(self, self.file)
+        print(f'Settings saved at {self.file!r}')
+
+    def add_current_file(self, file):
+        if file not in self.recent_files:
+            self.recent_files.append(file)
+
+        if len(self.recent_files) > self.recent_files_limit:
+            self.recent_files = self.recent_files[:self.recent_files_limit]
+
+    def get_data(self):
+        data = {
+            'recent_files': self.recent_files,
+            'recent_files_limit': self.recent_files_limit,
+        }
+        return data
+
+class COLORS:
+
+    RED = (200, 0, 0)
+    GREEN = (0, 200, 0)
+    ORANGE = (255, 128, 0)
+    YELLOW = (255, 255, 0)
+    GREY = (128, 128, 128)
 
 class CURRENCIES:
     EUR = 0
@@ -34,6 +82,9 @@ class Project:
         self.category_groups = list()
 
         self.version = '1'
+
+    def safe_delete_operation(self, operation):
+        self.operations.remove(operation)
 
     def get_data(self):
         data = {
@@ -108,6 +159,9 @@ class Project:
 
             operation_id = operation_data.get('id')
 
+            date = operation_data['date']
+            date = Date.from_string(date)
+
             operation = Operation()
             if operation_id:
                 operation.id = operation_id
@@ -115,7 +169,7 @@ class Project:
             operation.label = operation_data['label']
             operation.amount = amount
             operation.category = category
-            operation.date = operation_data['date']
+            operation.date = date
             operation.note = operation_data['note']
             operation.is_budget = operation_data.get('is_budget', False)
 
@@ -130,7 +184,7 @@ class Project:
         years = list()
 
         for operation in self.operations:
-            operation_day, operation_year, operation_year = operation.date.split('/')
+            operation_year = str(operation.date.year())
 
             if operation_year not in years:
                 years.append(operation_year)
@@ -153,9 +207,9 @@ class Project:
 
         year_account_operation = list()
         for account_operation in account_operations:
-            operation_date = split_date(account_operation.date)
+            operation_year = account_operation.date.year()
 
-            if operation_date['year'] == year:
+            if operation_year == int(year):
                 year_account_operation.append(account_operation)
 
         return year_account_operation
@@ -165,9 +219,9 @@ class Project:
 
         month_account_operation = list()
         for account_operation in year_account_operations:
-            operation_date = split_date(account_operation.date)
+            operation_month = account_operation.date.month()
 
-            if operation_date['month'] == month:
+            if operation_month == int(month):
                 month_account_operation.append(account_operation)
 
         return month_account_operation
@@ -176,79 +230,74 @@ class Project:
         balance = Amount()
 
         if date is not None:
-            date = datetime.strptime(date, "%d/%m/%Y")
+            date = Date.from_string(date)
 
         account_operations = self.get_account_operations(account)
         for operation in account_operations:
-            operation_date = datetime.strptime(operation.date, "%d/%m/%Y")
 
-            if date is None or operation_date <= date:
+            if date is None or operation.date <= date:
                 balance.int += operation.amount.int
 
         return balance
-
-    def get_year_summary(self, account, year):
-        months_data = dict()
-
-        year_expenses = Amount()
-        year_income = Amount()
-        year_total = Amount()
-
-        for index in range(12):
-            month = f'{index + 1:02d}'
-
-            month_operations = self.get_month_account_operations(account, year, month)
-
-            if month_operations:
-                last_day_month = get_number_of_days(month, year)
-                month_balance = self.get_balance(account, f'{last_day_month}/{month}/{year}')
-
-                month_expenses = Amount()
-                month_income = Amount()
-                month_total = Amount()
-                for operation in month_operations:
-                    month_total.int += operation.amount.int
-                    year_total.int += operation.amount.int
-
-                    if operation.amount.int <= 0:
-                        month_expenses.int += operation.amount.int
-                        year_expenses.int += operation.amount.int
-
-                    elif operation.amount.int > 0:
-                        month_income.int += operation.amount.int
-                        year_income.int += operation.amount.int
-
-            else:
-                month_expenses = None
-                month_income = None
-                month_total = None
-                month_balance = None
-
-            months_data[month] = {
-                'expenses': month_expenses,
-                'income': month_income,
-                'total': month_total,
-                'balance': month_balance,
-            }
-
-        year_data = {
-            'expenses': year_expenses,
-            'income': year_income,
-            'total': year_total,
-            'balance': None,
-        }
-        return months_data, year_data
+    #
+    # def get_year_summary(self, account, year):
+    #     months_data = dict()
+    #
+    #     year_expenses = Amount()
+    #     year_income = Amount()
+    #     year_total = Amount()
+    #
+    #     for index in range(12):
+    #         month = f'{index + 1:02d}'
+    #
+    #         month_operations = self.get_month_account_operations(account, year, month)
+    #
+    #         if month_operations:
+    #             last_day_month = get_number_of_days(month, year)
+    #             month_balance = self.get_balance(account, f'{last_day_month}/{month}/{year}')
+    #
+    #             month_expenses = Amount()
+    #             month_income = Amount()
+    #             month_total = Amount()
+    #             for operation in month_operations:
+    #                 month_total.int += operation.amount.int
+    #                 year_total.int += operation.amount.int
+    #
+    #                 if operation.amount.int <= 0:
+    #                     month_expenses.int += operation.amount.int
+    #                     year_expenses.int += operation.amount.int
+    #
+    #                 elif operation.amount.int > 0:
+    #                     month_income.int += operation.amount.int
+    #                     year_income.int += operation.amount.int
+    #
+    #         else:
+    #             month_expenses = None
+    #             month_income = None
+    #             month_total = None
+    #             month_balance = None
+    #
+    #         months_data[month] = {
+    #             'expenses': month_expenses,
+    #             'income': month_income,
+    #             'total': month_total,
+    #             'balance': month_balance,
+    #         }
+    #
+    #     year_data = {
+    #         'expenses': year_expenses,
+    #         'income': year_income,
+    #         'total': year_total,
+    #         'balance': None,
+    #     }
+    #     return months_data, year_data
 
     def save(self, file):
-        s = json_dumps(self)
-
-        with open(file, 'w', encoding='utf-8') as f:
-            f.write(s)
+        json_dump(self, file)
 
     @classmethod
     def open(cls, file):
-        with open(file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        data = json_load(file)
 
         version = data.get('version', None)
         print('version', version)
@@ -261,7 +310,6 @@ class Project:
     @classmethod
     def new(cls):
         file = os.path.join(__dir__, 'data', 'new_project.json')
-        print(file)
         project = cls.open(file)
         return project
 
@@ -291,7 +339,7 @@ class Project:
 
                 operation = Operation()
                 operation.label = label.strip()
-                operation.date = date
+                operation.date = Date.from_string(date)
                 operation.amount = amount
                 operation.account = account
 
@@ -304,48 +352,20 @@ class Project:
 
         for category in self.categories:
             category_parents = get_category_parents(category)
-            print(category, category_parents)
 
             if category_group in category_parents:
                 categories.append(category)
 
         return categories
 
-class Date:
-
-    def __init__(self):
-        self.day = 1
-        self.month = 1
-        self.year = 2025
-        self.pattern = '{day:02d}/{month:02d}/{year:04d}'
+class Date(QDate):
 
     def __str__(self):
-        s = self.pattern.format(
-            day=self.day,
-            month=self.month,
-            year=self.year,
-        )
-        return s
-
-    def get_day(self):
-        pass
-
-    def get_month(self):
-        pass
-
-    def get_year(self):
-        pass
+        return self.toString("dd/MM/yyyy")
 
     @classmethod
-    def from_str(cls, str_):
-        day_str, month_str, year_str = str_.split('/')
-
-        date = cls()
-        date.day = int(day_str)
-        date.month = int(month_str)
-        date.year = int(year_str)
-
-        return date
+    def from_string(cls, s):
+        return cls(datetime.strptime(s, "%d/%m/%Y"))
 
 class CategoryGroup:
 
@@ -531,7 +551,7 @@ class Operation:
         self.label = str()
         self.amount = Amount()
         self.category = None
-        self.date = str()
+        self.date = Date()
         self.note = str()
         self.is_budget = False
         self.linked_operation = None
@@ -551,7 +571,7 @@ class Operation:
 
         data = {
             'id': self.id,
-            'date': self.date,
+            'date': str(self.date),
             'amount': self.amount,
             'label': self.label,
             'note': self.note,

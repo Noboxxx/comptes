@@ -24,6 +24,18 @@ def json_dumps(data):
     s = json.dumps(data, default=plop, ensure_ascii=False, indent=4)
     return s
 
+def json_dump(data, file):
+    s = json_dumps(data)
+
+    with open(file, 'w', encoding='utf-8') as f:
+        f.write(s)
+
+def json_load(file):
+    with open(file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    return data
+
 def get_one_liner_text(text):
     text = text.replace('\n', ' ')
     text = re.sub(' +', ' ', text)

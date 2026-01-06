@@ -99,6 +99,39 @@ class CategoryGroupPicker(QLineEdit):
         self.menu.exec_(world_point)
 
 
+class DatePicker(QLineEdit):
+    def __init__(self):
+        super().__init__()
+
+        self.setReadOnly(True)
+
+        self.calendar_widget = QCalendarWidget(self)
+        self.calendar_widget.selectionChanged.connect(self.set_date_selected)
+
+        widget_action = QWidgetAction(self)
+        widget_action.setDefaultWidget(self.calendar_widget)
+
+        self.menu = QMenu()
+        self.menu.addAction(widget_action)
+
+        self.selected_date = None
+
+    def mousePressEvent(self, event):
+        self.menu.exec_(self.mapToGlobal(self.rect().bottomLeft()))
+
+    def reload(self):
+        if self.selected_date:
+            self.calendar_widget.setSelectedDate(self.selected_date)
+
+    def set_date_selected(self):
+        date = self.calendar_widget.selectedDate()
+        date = Date(date)
+        print('date:', date)
+
+        self.setText(str(date))
+        self.selected_date = date
+
+
 class CategoryPicker(QLineEdit):
 
     def __init__(self):
@@ -537,29 +570,32 @@ class OperationEditor(QDialog):
         self.setWindowTitle('Operation Editor')
         self.resize(300, 300)
 
-        self.operation = Operation()
-        self.project = Project()
+        self.operation = None
+        self.project = None
 
         self.account_combo = QComboBox()
-        self.date_line = QLineEdit()
+        self.date_picker = DatePicker()
 
-        self.label_line = QTextEdit()
+        self.label_text_edit = QTextEdit()
 
         self.amount_spin = QDoubleSpinBox()
-        self.amount_spin.setMinimum(-1_000_000)
-        self.amount_spin.setMaximum(1_000_000)
+        self.amount_spin.setMinimum(-100_000_000)
+        self.amount_spin.setMaximum(100_000_000)
 
         self.category_picker = CategoryPicker()
 
         self.is_budget_check = QCheckBox()
 
+        self.note_text_edit = QTextEdit()
+
         form_layout = QFormLayout()
         form_layout.addRow('is Budget', self.is_budget_check)
         form_layout.addRow('Account', self.account_combo)
-        form_layout.addRow('Date', self.date_line)
-        form_layout.addRow('Label', self.label_line)
+        form_layout.addRow('Date', self.date_picker)
+        form_layout.addRow('Label', self.label_text_edit)
         form_layout.addRow('Amount', self.amount_spin)
         form_layout.addRow('Category', self.category_picker)
+        form_layout.addRow('Note', self.note_text_edit)
 
         ok_btn = QPushButton('Ok')
         ok_btn.clicked.connect(self.validate)
@@ -580,13 +616,13 @@ class OperationEditor(QDialog):
 
     def validate(self):
         account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
-        label = self.label_line.toPlainText()
+        label = self.label_text_edit.toPlainText()
         amount = Amount.from_float(self.amount_spin.value())
         category = self.category_picker.selected_category
         is_budget = self.is_budget_check.isChecked()
 
-        date = self.date_line.text()
-        note = ''
+        date = self.date_picker.selected_date
+        note = self.note_text_edit.toPlainText()
 
         self.operation.account = account
         self.operation.label = label
@@ -619,84 +655,85 @@ class OperationEditor(QDialog):
         self.category_picker.set_category_selected(category)
         self.category_picker.reload()
 
-        self.label_line.setText(label)
+        self.label_text_edit.setText(label)
         self.amount_spin.setValue(amount.as_unit())
-        self.date_line.setText(date)
         self.is_budget_check.setChecked(is_budget)
+        self.note_text_edit.setText(note)
+        self.date_picker.selected_date = date
 
 
-class MonthlyTable(QTableWidget):
-
-    def __init__(self):
-        super().__init__()
-
-        self.project = Project()
-
-        self.selected_year = None
-        self.selected_account = None
-
-        # table
-        self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-
-        # headers
-        self.h_headers = (
-            'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
-            'September', 'October', 'November', 'December', 'Year'
-        )
-
-        self.v_headers = (
-            'Income',
-            'Expenses',
-            'Total',
-            'Balance'
-        )
-
-        # columns / rows
-        self.setColumnCount(len(self.h_headers))
-        self.setRowCount(len(self.v_headers))
-
-        for index in range(len(self.h_headers)):
-            self.setColumnWidth(index, 80)
-
-        header = self.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-
-        vheader = self.verticalHeader()
-        vheader.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-
-    def set_header_labels(self):
-        self.setVerticalHeaderLabels(self.v_headers)
-        self.setHorizontalHeaderLabels(self.h_headers)
-
-    def reload(self):
-        self.clear()
-
-        self.set_header_labels()
-
-        months_stats, year_stats = self.project.get_year_summary(self.selected_account, self.selected_year)
-
-        expenses = list()
-        income = list()
-        total = list()
-        balance = list()
-        for month, data in months_stats.items():
-            expenses.append(data['expenses'])
-            income.append(data['income'])
-            total.append(data['total'])
-            balance.append(data['balance'])
-
-        expenses.append(year_stats['expenses'])
-        income.append(year_stats['income'])
-        total.append(year_stats['total'])
-        balance.append(year_stats['balance'])
-
-        table = income, expenses, total, balance
-        for row_index, values in enumerate(table):
-            for column_index, value in enumerate(values):
-                if value is None:
-                    continue
-                item = QTableWidgetItem(str(value))
-                self.setItem(row_index, column_index, item)
+# class MonthlyTable(QTableWidget):
+#
+#     def __init__(self):
+#         super().__init__()
+#
+#         self.project = Project()
+#
+#         self.selected_year = None
+#         self.selected_account = None
+#
+#         # table
+#         self.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+#
+#         # headers
+#         self.h_headers = (
+#             'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+#             'September', 'October', 'November', 'December', 'Year'
+#         )
+#
+#         self.v_headers = (
+#             'Income',
+#             'Expenses',
+#             'Total',
+#             'Balance'
+#         )
+#
+#         # columns / rows
+#         self.setColumnCount(len(self.h_headers))
+#         self.setRowCount(len(self.v_headers))
+#
+#         for index in range(len(self.h_headers)):
+#             self.setColumnWidth(index, 80)
+#
+#         header = self.horizontalHeader()
+#         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+#
+#         vheader = self.verticalHeader()
+#         vheader.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+#
+#     def set_header_labels(self):
+#         self.setVerticalHeaderLabels(self.v_headers)
+#         self.setHorizontalHeaderLabels(self.h_headers)
+#
+#     def reload(self):
+#         self.clear()
+#
+#         self.set_header_labels()
+#
+#         months_stats, year_stats = self.project.get_year_summary(self.selected_account, self.selected_year)
+#
+#         expenses = list()
+#         income = list()
+#         total = list()
+#         balance = list()
+#         for month, data in months_stats.items():
+#             expenses.append(data['expenses'])
+#             income.append(data['income'])
+#             total.append(data['total'])
+#             balance.append(data['balance'])
+#
+#         expenses.append(year_stats['expenses'])
+#         income.append(year_stats['income'])
+#         total.append(year_stats['total'])
+#         balance.append(year_stats['balance'])
+#
+#         table = income, expenses, total, balance
+#         for row_index, values in enumerate(table):
+#             for column_index, value in enumerate(values):
+#                 if value is None:
+#                     continue
+#                 item = QTableWidgetItem(str(value))
+#                 self.setItem(row_index, column_index, item)
 
 
 class OperationItem(QTreeWidgetItem):
@@ -711,7 +748,7 @@ class OperationItem(QTreeWidgetItem):
 
     def reload(self):
         # date
-        self.setText(1, self.operation.date)
+        self.setText(1, str(self.operation.date))
 
         # label
         label = get_one_liner_text(self.operation.label)
@@ -743,6 +780,7 @@ class OperationItem(QTreeWidgetItem):
                 self.setBackground(index, QBrush(QColor(255, 255, 0, 25)))
                 self.setForeground(index, QBrush(QColor(100, 100, 0)))
 
+
 class OperationsTree(QTreeWidget):
 
     HEADERS_LABEL = 'category', 'date', 'amount', 'label'
@@ -759,7 +797,6 @@ class OperationsTree(QTreeWidget):
         self.setHeaderLabels(self.HEADERS_LABEL)
         self.setAlternatingRowColors(True)
         self.setSelectionMode(self.SelectionMode.ExtendedSelection)
-        # self.setSortingEnabled(True)
         self.setIconSize(QSize(22, 22))
 
         for index, width in enumerate(self.HEADERS_WIDTH):
@@ -767,24 +804,31 @@ class OperationsTree(QTreeWidget):
                 continue
             self.setColumnWidth(index, width)
 
+    def get_selected_operation_items(self):
+
+        selected_items = list()
+        for item in self.selectedItems():
+            if hasattr(item, 'operation'):
+                selected_items.append(item)
+
+        return selected_items
+
     def get_selected_operations(self):
-        selected_items = self.selectedItems()
+        selected_items = self.get_selected_operation_items()
 
         selected_operations = list()
         for item in selected_items:
-            if hasattr(item, 'operation'):
-                operation = item.operation
-                selected_operations.append(operation)
+            selected_operations.append(item.operation)
 
         return selected_operations
 
     def reload(self):
         self.clear()
 
-        for operation in self.project.operations:
-            date = split_date(operation.date)
+        operations = sorted(self.project.operations, key=lambda x: x.date)
 
-            if date['year'] != self.selected_year:
+        for operation in operations:
+            if str(operation.date.year()) != self.selected_year:
                 continue
 
             if operation.account is not self.selected_account:
@@ -797,25 +841,36 @@ class OperationsTree(QTreeWidget):
             self.addTopLevelItem(tree_item)
 
 
-class CategorySummaryItem(QTreeWidgetItem):
+class SummaryItem(QTreeWidgetItem):
 
     def __init__(self):
         super().__init__()
 
+        self.color_rules = [
+            {'color': COLORS.GREEN, 'func': lambda x: x > 0},
+            {'color': None, 'func': lambda x: x < 0},
+            {'color': COLORS.GREY, 'func': lambda x: x == 0},
+        ]
+
         self.operations = list()
+
+        for index in range(len(OperationsTree.HEADERS_LABEL)):
+            self.setSizeHint(index, QSize(0, 35))
 
     def reload(self):
         year_sum = Amount()
         for index in range(12):
             month = index + 1
-            month_formatted = f'{month:02d}'
+
+            is_month_budget = False
 
             month_operations = self.operations
-            month_operations = [x for x in month_operations if split_date(x.date)['month'] == month_formatted]
+            month_operations = [x for x in month_operations if x.date.month() == month]
+            month_budget_operations = [x for x in month_operations if x.is_budget is is_month_budget]
 
             # amount
             month_amount = Amount()
-            for operation in month_operations:
+            for operation in month_budget_operations:
                 month_amount.int += operation.amount.int
 
             year_sum.int += month_amount.int
@@ -823,35 +878,33 @@ class CategorySummaryItem(QTreeWidgetItem):
             self.setText(month, str(month_amount))
 
             # color
-            if month_amount.int > 0:
-                color = Qt.GlobalColor.darkGreen
-            elif month_amount.int < 0:
-                color = None
-            else:
-                color = Qt.GlobalColor.lightGray
+            color = None
+            for color_rule in self.color_rules:
+                func = color_rule['func']
+                if func(month_amount.int):
+                    color = color_rule['color']
 
             if color:
-                self.setForeground(month, QColor(color))
+                self.setForeground(month, QColor(*color))
 
         # year
         self.setText(13, str(year_sum))
 
         # color
-        if year_sum.int > 0:
-            color = Qt.GlobalColor.darkGreen
-        elif year_sum.int < 0:
-            color = None
-        else:
-            color = Qt.GlobalColor.lightGray
+        color = None
+        for color_rule in self.color_rules:
+            func = color_rule['func']
+            if func(year_sum.int):
+                color = color_rule['color']
 
         if color:
-            self.setForeground(13, QColor(color))
+            self.setForeground(13, QColor(*color))
 
 
-class CategorySummaryTree(QTreeWidget):
+class SummaryTree(QTreeWidget):
 
     HEADERS_MAP = {
-        'Category': 150,
+        'Category': 250,
         'January': None,
         'February': None,
         'March': None,
@@ -875,15 +928,20 @@ class CategorySummaryTree(QTreeWidget):
         self.selected_year = None
 
         self.setAlternatingRowColors(True)
+        self.setSelectionMode(self.SelectionMode.ExtendedSelection)
+        self.setIconSize(QSize(20, 20))
+
+        header = self.header()
 
         headers = list(self.HEADERS_MAP.keys())
         self.setHeaderLabels(headers)
 
         for index, width in enumerate(self.HEADERS_MAP.values()):
-            if width is None:
-                continue
-
-            self.setColumnWidth(index, width)
+            if width:
+                header.setSectionResizeMode(index, QHeaderView.ResizeMode.Fixed)
+                self.setColumnWidth(index, width)
+            else:
+                header.setSectionResizeMode(index, QHeaderView.ResizeMode.Stretch)
 
     def reload(self):
         self.clear()
@@ -892,22 +950,65 @@ class CategorySummaryTree(QTreeWidget):
             print('No project found')
             return
 
-        account_operations = [x for x in self.project.operations if x.account is self.selected_account]
-        year_operations = [x for x in account_operations if split_date(x.date)['year'] == self.selected_year]
+        # operations
+        account_budget_operations = [x for x in self.project.operations if x.is_budget is False]
+        account_operations = [x for x in account_budget_operations if x.account is self.selected_account]
+        year_operations = [x for x in account_operations if str(x.date.year()) == self.selected_year]
 
         # balance item
-        balance_item = CategorySummaryItem()
+        balance_item = QTreeWidgetItem()
+        for index in range(len(OperationsTree.HEADERS_LABEL)):
+            balance_item.setSizeHint(index, QSize(0, 35))
         balance_item.setText(0, 'Balance')
-        balance_item.operations = year_operations
-        balance_item.reload()
+
+        for index in range(12):
+            month = index + 1
+
+            balance_amount = Amount()
+
+            if self.selected_year:
+                days_in_month = Date(int(self.selected_year), month, 1).daysInMonth()
+                last_day_month_date = Date(int(self.selected_year), month, days_in_month)
+
+                for operation in account_operations:
+                    if operation.date > last_day_month_date:
+                        continue
+
+                    balance_amount.int += operation.amount.int
+
+            balance_item.setText(month, str(balance_amount))
+
+            # color
+            if balance_amount.as_unit() >= 1_000:
+                color = COLORS.GREEN
+            elif balance_amount.as_unit() >= 0:
+                color = COLORS.ORANGE
+            else:
+                color = COLORS.RED
+
+            if color:
+                balance_item.setForeground(month, QColor(*color))
+
         self.addTopLevelItem(balance_item)
+
+        # total item
+        total_item = SummaryItem()
+        total_item.setText(0, 'Total')
+        total_item.operations = year_operations
+        total_item.color_rules = [
+            {'color': COLORS.GREEN, 'func': lambda x: x > 0},
+            {'color': COLORS.RED, 'func': lambda x: x < 0},
+            {'color': COLORS.GREY, 'func': lambda x: x == 0},
+        ]
+        total_item.reload()
+        self.addTopLevelItem(total_item)
 
         category_group_item_map = dict()
         for category_group in self.project.category_groups:
             category_group_categories = self.project.get_categories(category_group)
             category_group_operations = [x for x in year_operations if x.category in category_group_categories]
 
-            category_group_item = CategorySummaryItem()
+            category_group_item = SummaryItem()
             category_group_item.setText(0, category_group.name)
             category_group_item.setIcon(0, category_group.get_icon(16))
 
@@ -929,7 +1030,7 @@ class CategorySummaryTree(QTreeWidget):
         for category in self.project.categories:
             category_operations = [x for x in year_operations if x.category is category]
 
-            category_item = CategorySummaryItem()
+            category_item = SummaryItem()
             category_item.setText(0, category.name)
             category_item.setIcon(0, category.get_icon(16))
 
@@ -948,7 +1049,7 @@ class CategorySummaryTree(QTreeWidget):
             radius=16,
         )
 
-        undefined_category_item = CategorySummaryItem()
+        undefined_category_item = SummaryItem()
         undefined_category_item.setText(0, 'Undefined')
         undefined_category_item.setIcon(0, category_icon)
         undefined_category_item.operations = undefined_category_operations
@@ -964,6 +1065,14 @@ class ComptesWidget(QWidget):
         self.project = None
         self.current_file = None
 
+        # settings
+        settings_file = os.path.join(os.getenv('APPDATA'), 'comptes', 'settings.json')
+        print('settings_file:', settings_file)
+
+        self.settings = Settings()
+        self.settings.file = settings_file
+        self.settings.reload()
+
         # open recent
         self.open_recent_projects_menu = QMenu('Open Recent')
 
@@ -977,11 +1086,8 @@ class ComptesWidget(QWidget):
         self.years_combo.setPlaceholderText('year')
         self.years_combo.currentTextChanged.connect(self.reload_children)
 
-        # monthly table
-        self.monthly_table = MonthlyTable()
-
         # category_tree
-        self.category_summary_tree = CategorySummaryTree()
+        self.category_summary_tree = SummaryTree()
 
         # info
         self.account_info_label = QLabel()
@@ -998,21 +1104,24 @@ class ComptesWidget(QWidget):
         self.operations_tree = OperationsTree()
         self.operations_tree.itemSelectionChanged.connect(self.reload_selection_info_label)
 
-        tab = QTabWidget()
-        tab.addTab(self.category_summary_tree, 'Categories')
-        tab.addTab(self.monthly_table, 'Summary')
-        tab.addTab(self.operations_tree, 'Operations')
+        self.tab = QTabWidget()
+        self.tab.addTab(self.category_summary_tree, 'Summary')
+        self.tab.addTab(self.operations_tree, 'Operations')
 
         # main_layout
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.account_combo)
         main_layout.addWidget(self.years_combo)
-        main_layout.addWidget(tab)
+        main_layout.addWidget(self.tab)
 
         self.setLayout(main_layout)
 
         # new project
         self.new_project()
+
+    def hideEvent(self, event):
+        self.settings.save()
+        super().hideEvent(event)
 
     def ask_save_project(self):
         if not self.current_file:
@@ -1030,12 +1139,6 @@ class ComptesWidget(QWidget):
 
         self.save_project(file)
 
-    def save_project(self, file):
-        self.project.save(file)
-        self.current_file = file
-        self.reload()
-        print(f'File saved at {file!r}')
-
     def ask_new_project(self):
         proceed = QMessageBox.question(
             self,
@@ -1047,14 +1150,9 @@ class ComptesWidget(QWidget):
         if proceed != QMessageBox.StandardButton.Yes:
             print('Operation Canceled')
             return
-        
+
         self.new_project()
-        
-    def new_project(self):
-        self.project = Project.new()
-        self.current_file = None
-        self.reload()
-    
+
     def ask_open_recent_project(self, file):
         proceed = QMessageBox.question(
             self,
@@ -1068,21 +1166,7 @@ class ComptesWidget(QWidget):
             return
 
         self.open_project(file)
-    
-    def reload_window_title(self):
-        s = 'Comptes'
-        if self.current_file is None:
-            s += ' - New Project'
-        else:
-            s+= f' - {self.current_file}'
-            
-        self.setWindowTitle(s)
-    
-    def open_project(self, file):
-        self.project = Project.open(file)
-        self.current_file = file
-        self.reload()
-    
+        
     def ask_open_project(self):
         file, flt = QFileDialog.getOpenFileName(self)
 
@@ -1091,7 +1175,25 @@ class ComptesWidget(QWidget):
             return
 
         self.open_project(file)
-
+    
+    def save_project(self, file):
+        self.project.save(file)
+        self.current_file = file
+        self.settings.add_current_file(file)
+        self.reload()
+        print(f'File saved at {file!r}')
+    
+    def new_project(self):
+        self.project = Project.new()
+        self.current_file = None
+        self.reload()
+    
+    def open_project(self, file):
+        self.project = Project.open(file)
+        self.current_file = file
+        self.settings.add_current_file(file)
+        self.reload()
+    
     def import_credit_agricole_csv(self):
         account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
 
@@ -1159,10 +1261,14 @@ class ComptesWidget(QWidget):
         edit_account_act.triggered.connect(self.edit_account)
 
         edit_operation_act = QAction('Edit Selected Operation', self)
+        edit_operation_act.setShortcut('Ctrl+E')
         edit_operation_act.triggered.connect(self.edit_operation)
 
         edit_categories_act = QAction('Edit Categories', self)
         edit_categories_act.triggered.connect(self.edit_categories)
+
+        delete_operations_act = QAction('Delete Selected Operations', self)
+        delete_operations_act.triggered.connect(self.delete_operations)
 
         edit_menu = QMenu('Edit')
         edit_menu.addAction(edit_operation_act)
@@ -1170,6 +1276,8 @@ class ComptesWidget(QWidget):
         edit_menu.addAction(edit_account_act)
         edit_menu.addSeparator()
         edit_menu.addAction(guess_category_on_selected_operations_act)
+        edit_menu.addSeparator()
+        edit_menu.addAction(delete_operations_act)
 
         create_account_act = QAction('Create Account', self)
         create_account_act.triggered.connect(self.create_account)
@@ -1190,9 +1298,11 @@ class ComptesWidget(QWidget):
         return menu_bar
 
     def guess_category_on_selected_operations(self):
-        selected_operations = self.operations_tree.get_selected_operations()
+        selected_operation_items = self.operations_tree.get_selected_operation_items()
 
-        for operation in selected_operations:
+        for operation_item in selected_operation_items:
+            operation = operation_item.operation
+
             operation_label_lower = operation.label.lower()
 
             new_category = None
@@ -1210,7 +1320,8 @@ class ComptesWidget(QWidget):
             if new_category:
                 operation.category = new_category
 
-        self.reload()
+        for operation_item in selected_operation_items:
+            operation_item.reload()
 
     def edit_categories(self):
         category_view = CategoryView(self)
@@ -1226,13 +1337,47 @@ class ComptesWidget(QWidget):
 
         self.reload()
 
-    def edit_operation(self):
-        selected_operations = self.operations_tree.get_selected_operations()
+    def get_selected_visible_operation_items(self):
+        operation_tree_is_visible = self.tab.currentWidget() is self.operations_tree
+        if operation_tree_is_visible:
+            selected_operation_items = self.operations_tree.get_selected_operation_items()
+        else:
+            selected_operation_items = None
 
-        if not selected_operations:
+        return selected_operation_items
+
+    def delete_operations(self):
+        selected_operation_items = self.get_selected_visible_operation_items()
+
+        if not selected_operation_items:
             raise Exception('No operation selected')
 
-        selected_operation = selected_operations[0]
+        proceed = QMessageBox.question(
+            self,
+            f'Delete {len(selected_operation_items)} operations?',
+            'This is not undoable. Are you sure?',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if proceed != QMessageBox.StandardButton.Yes:
+            print('Operation Canceled')
+            return
+
+        for selected_operation_item in selected_operation_items:
+            operation = selected_operation_item.operation
+            self.project.safe_delete_operation(operation)
+
+        self.reload()
+
+    def edit_operation(self):
+
+        selected_operation_items = self.get_selected_visible_operation_items()
+
+        if not selected_operation_items:
+            raise Exception('No operation selected')
+
+        selected_operation_item = selected_operation_items[0]
+        selected_operation = selected_operation_item.operation
 
         operation_editor = OperationEditor(self)
         operation_editor.project = self.project
@@ -1244,6 +1389,25 @@ class ComptesWidget(QWidget):
         if not proceed:
             print('Operation Canceled')
             return
+
+        selected_operation_item.reload()
+
+    def create_operation(self):
+        operation = Operation()
+        operation.account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
+
+        operation_editor = OperationEditor(self)
+        operation_editor.project = self.project
+        operation_editor.operation = operation
+        operation_editor.reload()
+
+        proceed = operation_editor.exec()
+
+        if not proceed:
+            print('Operation Canceled')
+            return
+
+        self.project.operations.append(operation_editor.operation)
 
         self.reload()
 
@@ -1265,21 +1429,6 @@ class ComptesWidget(QWidget):
 
         self.reload()
 
-    def create_operation(self):
-        operation_editor = OperationEditor(self)
-        operation_editor.project = self.project
-        operation_editor.reload()
-
-        proceed = operation_editor.exec()
-
-        if not proceed:
-            print('Operation Canceled')
-            return
-
-        self.project.operations.append(operation_editor.operation)
-
-        self.reload()
-
     def create_account(self):
         account_editor = AccountEditor(self)
         account_editor.reload()
@@ -1294,10 +1443,19 @@ class ComptesWidget(QWidget):
 
         self.reload()
 
+    def reload_window_title(self):
+        s = 'Comptes'
+        if self.current_file is None:
+            s += ' - New Project'
+        else:
+            s+= f' - {self.current_file}'
+
+        self.setWindowTitle(s)
+
     def reload_children(self):
         self.reload_window_title()
         self.reload_category_summary_tree()
-        self.reload_monthly_table()
+        # self.reload_monthly_table()
         self.reload_operations_tree()
         self.reload_selection_info_label()
         self.reload_account_info_label()
@@ -1306,10 +1464,7 @@ class ComptesWidget(QWidget):
     def reload_recent_projects(self):
         self.open_recent_projects_menu.clear()
 
-        files = [
-            r'G:\Mon Drive\work\mes_comptes\test\mes_comptes.007.project.json',
-            r'G:\Mon Drive\work\mes_comptes\test\mes_comptes.006.project.json'
-        ]
+        files = self.settings.recent_files
 
         for file in files:
             file_name = os.path.basename(file)
@@ -1330,12 +1485,12 @@ class ComptesWidget(QWidget):
 
         self.category_summary_tree.reload()
 
-    def reload_monthly_table(self):
-        self.monthly_table.project = self.project
-        self.monthly_table.selected_account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
-        self.monthly_table.selected_year = self.years_combo.currentText()
-
-        self.monthly_table.reload()
+    # def reload_monthly_table(self):
+    #     self.monthly_table.project = self.project
+    #     self.monthly_table.selected_account = self.account_combo.currentData(Qt.ItemDataRole.UserRole)
+    #     self.monthly_table.selected_year = self.years_combo.currentText()
+    #
+    #     self.monthly_table.reload()
 
     def reload_operations_tree(self):
         self.operations_tree.project = self.project
@@ -1425,6 +1580,7 @@ def open_comptes():
     w.reload()
     
     ui = QMainWindow()
+    ui.resize(1920//2, 1080//2)
     ui.setCentralWidget(w)
     ui.showMaximized()
     ui.setMenuBar(w.get_menu_bar())
