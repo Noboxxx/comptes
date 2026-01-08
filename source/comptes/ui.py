@@ -1,12 +1,9 @@
-import os
 from functools import partial
-
 from PySide6.QtWidgets import *
-from PySide6.QtCore import *
 from PySide6.QtGui import *
-
 from .core import *
 from .utils import print_json, get_one_liner_text, create_category_icon, create_category_pixmap
+
 
 __folder__ = os.path.dirname(__file__)
 ICON_FOLDER = os.path.join(__folder__, 'icon')
@@ -105,8 +102,12 @@ class DatePicker(QLineEdit):
 
         self.setReadOnly(True)
 
+        self.selected_date = None
+
         self.calendar_widget = QCalendarWidget(self)
-        self.calendar_widget.selectionChanged.connect(self.set_date_selected)
+        self.calendar_widget.selectionChanged.connect(self.selection_changed)
+
+        self.default_date = self.calendar_widget.selectedDate()
 
         widget_action = QWidgetAction(self)
         widget_action.setDefaultWidget(self.calendar_widget)
@@ -114,22 +115,29 @@ class DatePicker(QLineEdit):
         self.menu = QMenu()
         self.menu.addAction(widget_action)
 
-        self.selected_date = None
+    def get_selected_date(self):
+        return Date.from_string(self.selected_date.toString('dd/MM/yyyy'))
 
     def mousePressEvent(self, event):
         self.menu.exec_(self.mapToGlobal(self.rect().bottomLeft()))
 
-    def reload(self):
-        if self.selected_date:
-            self.calendar_widget.setSelectedDate(self.selected_date)
+    def set_selected_date(self, date):
+        if date is None:
+            date = self.default_date
+        else:
+            date = QDate.fromString(str(date), 'dd/MM/yyyy')
+        print(f'default → {self.default_date}')
+        print(f'date → {date}, {type(date)}')
 
-    def set_date_selected(self):
-        date = self.calendar_widget.selectedDate()
-        date = Date(date)
-        print('date:', date)
-
-        self.setText(str(date))
         self.selected_date = date
+        self.calendar_widget.blockSignals(True)
+        self.calendar_widget.setSelectedDate(date)
+        self.calendar_widget.blockSignals(False)
+        self.setText(date.toString('dd/MM/yyyy'))
+
+    def selection_changed(self):
+        picked_date = self.calendar_widget.selectedDate()
+        self.set_selected_date(picked_date)
 
 
 class CategoryPicker(QLineEdit):
@@ -145,8 +153,6 @@ class CategoryPicker(QLineEdit):
         self.menu = QMenu()
 
     def reload(self):
-        print('CategoryPicker.reload')
-
         self.menu = QMenu()
 
         category_groups_map = dict()
@@ -180,8 +186,6 @@ class CategoryPicker(QLineEdit):
             category_label = ''
         else:
             category_label = str(category)
-
-        print('category', category, type(category))
 
         self.setText(category_label)
         self.selected_category = category
@@ -259,7 +263,6 @@ class CategoryGroupEditor(QDialog):
         self.category_group.name = name
         self.category_group.color = r, g, b
         self.category_group.parent_category_group = self.parent_category_group_picker.selected_category_group
-        print(self.category_group.parent_category_group)
 
         self.accept()
 
@@ -621,7 +624,7 @@ class OperationEditor(QDialog):
         category = self.category_picker.selected_category
         is_budget = self.is_budget_check.isChecked()
 
-        date = self.date_picker.selected_date
+        date = self.date_picker.get_selected_date()
         note = self.note_text_edit.toPlainText()
 
         self.operation.account = account
@@ -659,7 +662,8 @@ class OperationEditor(QDialog):
         self.amount_spin.setValue(amount.as_unit())
         self.is_budget_check.setChecked(is_budget)
         self.note_text_edit.setText(note)
-        self.date_picker.selected_date = date
+
+        self.date_picker.set_selected_date(date)
 
 
 # class MonthlyTable(QTableWidget):
@@ -836,7 +840,6 @@ class OperationsTree(QTreeWidget):
         self.clear()
 
         operations = reversed(sorted(self.project.operations, key=lambda x: x.date))
-
 
         for operation in operations:
             if str(operation.date.year()) != self.selected_year:

@@ -3,15 +3,17 @@ import re
 from datetime import datetime
 import random
 import string
-
 from PySide6.QtGui import *
 from PySide6.QtCore import *
+
 
 def random_id():
     return ''.join(random.choice(string.ascii_uppercase) for _ in range(8))
 
+
 def print_json(data):
     print(json_dumps(data))
+
 
 def json_dumps(data):
 
@@ -24,11 +26,13 @@ def json_dumps(data):
     s = json.dumps(data, default=plop, ensure_ascii=False, indent=4)
     return s
 
+
 def json_dump(data, file):
     s = json_dumps(data)
 
     with open(file, 'w', encoding='utf-8') as f:
         f.write(s)
+
 
 def json_load(file):
     with open(file, 'r', encoding='utf-8') as f:
@@ -36,10 +40,12 @@ def json_load(file):
 
     return data
 
+
 def get_one_liner_text(text):
     text = text.replace('\n', ' ')
     text = re.sub(' +', ' ', text)
     return text
+
 
 def get_number_of_days(month, year):
     month = int(month)
@@ -55,6 +61,7 @@ def get_number_of_days(month, year):
     days_in_month = next_month - first_day
     return days_in_month.days
 
+
 def split_date(date):
     day, month, year = date.split('/')
 
@@ -66,12 +73,14 @@ def split_date(date):
 
     return data
 
+
 def create_category_icon(text, color, radius):
     pixmap = create_category_pixmap(text, color, radius)
 
     icon = QIcon()
     icon.addPixmap(pixmap, QIcon.Mode.Normal, QIcon.State.On)
     return icon
+
 
 def create_category_pixmap(text, color, radius):
     size = radius * 2

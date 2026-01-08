@@ -2,52 +2,12 @@ import csv
 from datetime import datetime
 import re
 import os
-
 from PySide6.QtCore import *
-from .utils import get_number_of_days, random_id, create_category_pixmap, create_category_icon, \
-    json_dump, json_load
+from .utils import random_id, create_category_pixmap, create_category_icon, json_dump, json_load
+
 
 __dir__ = os.path.dirname(__file__)
 
-class Settings:
-
-    def __init__(self):
-        self.file = None
-        self.recent_files = list()
-        self.recent_files_limit = 10
-
-    def reload(self):
-        if not os.path.isfile(self.file):
-            return
-
-        data = json_load(self.file)
-
-        self.recent_files = data['recent_files']
-
-    def save(self):
-        if self.file is None:
-            raise Exception('No file registered')
-
-        directory = os.path.dirname(self.file)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        json_dump(self, self.file)
-        print(f'Settings saved at {self.file!r}')
-
-    def add_current_file(self, file):
-        if file not in self.recent_files:
-            self.recent_files.append(file)
-
-        if len(self.recent_files) > self.recent_files_limit:
-            self.recent_files = self.recent_files[:self.recent_files_limit]
-
-    def get_data(self):
-        data = {
-            'recent_files': self.recent_files,
-            'recent_files_limit': self.recent_files_limit,
-        }
-        return data
 
 class COLORS:
 
@@ -56,6 +16,7 @@ class COLORS:
     ORANGE = (255, 128, 0)
     YELLOW = (255, 255, 0)
     GREY = (128, 128, 128)
+
 
 class CURRENCIES:
     EUR = 0
@@ -72,6 +33,16 @@ class CURRENCIES:
     PATTERN = {
         EUR: '{unit}{seperator}{cents} {symbol}'
     }
+
+
+class REPEAT_MODE:
+
+    NO_REPETITION = 0
+    WEEKLY = 1
+    MONTHLY = 2
+    QUARTERLY = 3
+    ANNUALLY = 4
+
 
 class Project:
 
@@ -358,14 +329,76 @@ class Project:
 
         return categories
 
-class Date(QDate):
 
-    def __str__(self):
-        return self.toString("dd/MM/yyyy")
+class Operation:
 
-    @classmethod
-    def from_string(cls, s):
-        return cls(datetime.strptime(s, "%d/%m/%Y"))
+    def __init__(self):
+        self.id = random_id()
+        self.account = Account()
+        self.label = str()
+        self.amount = Amount()
+        self.category = None
+        self.date = Date()
+        self.note = str()
+        self.is_budget = False
+        self.linked_operation = None
+
+    def get_data(self):
+        category = self.category
+        if category is None:
+            category_id = None
+        else:
+            category_id = category.id
+
+        linked_operation = self.linked_operation
+        if linked_operation is None:
+            linked_operation_id = None
+        else:
+            linked_operation_id = linked_operation.id
+
+        data = {
+            'id': self.id,
+            'date': str(self.date),
+            'amount': self.amount,
+            'label': self.label,
+            'note': self.note,
+            'account.id': self.account.id,
+            'category.id': category_id,
+            'linked_operation.id': linked_operation_id,
+            'is_budget': self.is_budget,
+        }
+        return data
+
+
+class BudgetOperation:
+
+    def __init__(self):
+        self.id = random_id()
+        self.account = None
+        self.label = str()
+        self.amount = Amount()
+        self.category = None
+        self.start_date = None
+        self.end_date = None
+        self.note = str()
+        self.is_budget = False
+        self.repeat_mode = REPEAT_MODE.NO_REPETITION
+
+    def get_data(self):
+        data = {
+            'id': self.id,
+            'start_date': self.start_date,
+            'end_date': self.end_date,
+            'amount': self.amount,
+            'label': self.label,
+            'note': self.note,
+            'account.id': self.account.id,
+            'category.id': self.category.getattr('id', None),
+            'is_budget': self.is_budget,
+            'repeat_mode': self.repeat_mode,
+        }
+        return data
+
 
 class CategoryGroup:
 
@@ -409,6 +442,7 @@ class CategoryGroup:
         )
         return icon
 
+
 class Category:
 
     def __init__(self):
@@ -446,6 +480,17 @@ class Category:
             radius=radius
         )
         return icon
+
+
+class Date(QDate):
+
+    def __str__(self):
+        return self.toString('dd/MM/yyyy')
+
+    @classmethod
+    def from_string(cls, s):
+        return cls(datetime.strptime(s, '%d/%m/%Y'))
+
 
 class Amount:
 
@@ -522,6 +567,7 @@ class Amount:
         amount = cls(int_, currency, seperator)
         return amount
 
+
 class Account:
 
     def __init__(self):
@@ -543,44 +589,47 @@ class Account:
         }
         return data
 
-class Operation:
+
+class Settings:
 
     def __init__(self):
-        self.id = random_id()
-        self.account = Account()
-        self.label = str()
-        self.amount = Amount()
-        self.category = None
-        self.date = Date()
-        self.note = str()
-        self.is_budget = False
-        self.linked_operation = None
+        self.file = None
+        self.recent_files = list()
+        self.recent_files_limit = 10
+
+    def reload(self):
+        if not os.path.isfile(self.file):
+            return
+
+        data = json_load(self.file)
+
+        self.recent_files = data['recent_files']
+
+    def save(self):
+        if self.file is None:
+            raise Exception('No file registered')
+
+        directory = os.path.dirname(self.file)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        json_dump(self, self.file)
+        print(f'Settings saved at {self.file!r}')
+
+    def add_current_file(self, file):
+        if file not in self.recent_files:
+            self.recent_files.append(file)
+
+        if len(self.recent_files) > self.recent_files_limit:
+            self.recent_files = self.recent_files[:self.recent_files_limit]
 
     def get_data(self):
-        category = self.category
-        if category is None:
-            category_id = None
-        else:
-            category_id = category.id
-
-        linked_operation = self.linked_operation
-        if linked_operation is None:
-            linked_operation_id = None
-        else:
-            linked_operation_id = linked_operation.id
-
         data = {
-            'id': self.id,
-            'date': str(self.date),
-            'amount': self.amount,
-            'label': self.label,
-            'note': self.note,
-            'account.id': self.account.id,
-            'category.id': category_id,
-            'linked_operation.id': linked_operation_id,
-            'is_budget': self.is_budget,
+            'recent_files': self.recent_files,
+            'recent_files_limit': self.recent_files_limit,
         }
         return data
+
 
 def get_category_parents(item, data=None):
     if data is None:
