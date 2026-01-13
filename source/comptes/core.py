@@ -16,6 +16,7 @@ class COLORS:
     ORANGE = (255, 128, 0)
     YELLOW = (255, 255, 0)
     GREY = (128, 128, 128)
+    LIGHT_GREY = (170, 170, 170)
 
 
 class CURRENCIES:
@@ -51,6 +52,11 @@ class Project:
         self.operations = list()
         self.categories = list()
         self.category_groups = list()
+
+        self.undefined_category = Category()
+        self.undefined_category.name = 'Undefined'
+        self.undefined_category.emoji = '❔'
+        self.undefined_category.color = (100, 100, 100)
 
         self.version = '1'
 
@@ -88,6 +94,7 @@ class Project:
             category_group.id = category_group_id
             category_group.name = category_group_data['name']
             category_group.color = category_group_data['color']
+            category_group.emoji = category_group_data.get('emoji', '')
 
             category_groups_map[category_group_id] = category_group
 
@@ -123,7 +130,7 @@ class Project:
             account = accounts_map[account_id]
 
             amount_txt = operation_data['amount']
-            amount = Amount.from_text(amount_txt)
+            amount = Amount.from_string(amount_txt)
 
             category_id = operation_data['category.id']
             category = categories_map.get(category_id)
@@ -207,7 +214,7 @@ class Project:
         for operation in account_operations:
 
             if date is None or operation.date <= date:
-                balance.int += operation.amount.int
+                balance += operation.amount
 
         return balance
     #
@@ -306,7 +313,7 @@ class Project:
                 else:
                     raise Exception(f'Neither amount taken nor amount taken found for line {line!r}')
 
-                amount = Amount.from_text(amount_text)
+                amount = Amount.from_string(amount_text)
 
                 operation = Operation()
                 operation.label = label.strip()
@@ -370,6 +377,58 @@ class Operation:
         return data
 
 
+class Operations:
+
+    def __init__(self):
+        self.operations = list()
+
+    def get_categories(self):
+        categories = list()
+
+        for operation in self.operations:
+            category = operation.category
+
+            if category not in categories:
+                categories.append(category)
+
+        return categories
+
+    def get_year_total(self):
+        total = Amount()
+        for operation in self.operations:
+            total += operation.amount
+        return total
+
+    def get_months(self):
+        months = list()
+
+        for operation in self.operations:
+            month_name = operation.date.get_month_name()
+            if month_name not in months:
+                months.append(month_name)
+
+        return months
+
+    def get_month_total(self):
+        month_map = {x: Amount() for x in Date.month_labels}
+
+        for operation in self.operations:
+            month_name = operation.date.get_month_name()
+            month_map[month_name] += operation.amount
+
+        return month_map
+
+    def get_month_average(self):
+        return self.get_year_total() / 12
+
+    def get_operations_average(self):
+        operations = self.operations
+        if operations:
+            return self.get_year_total() / len(operations)
+        else:
+            return Amount()
+
+
 class BudgetOperation:
 
     def __init__(self):
@@ -405,6 +464,7 @@ class CategoryGroup:
     def __init__(self):
         self.id = random_id()
         self.name = str()
+        self.emoji = str()
         self.color = 0, 0, 0
         self.parent_category_group = None
 
@@ -422,6 +482,7 @@ class CategoryGroup:
             'id': self.id,
             'name': self.name,
             'color': self.color,
+            'emoji': self.emoji,
             'parent_category_group.id': parent_category_group_id,
         }
         return data
@@ -436,14 +497,19 @@ class CategoryGroup:
 
     def get_icon(self, radius):
         icon = create_category_icon(
-            text='',
+            text=self.emoji,
             color=self.color,
             radius=radius
         )
         return icon
 
+    def get_color(self):
+        return self.color
+
 
 class Category:
+
+    default_color = [100, 100, 100]
 
     def __init__(self):
         self.id = random_id()
@@ -454,6 +520,12 @@ class Category:
 
     def __str__(self):
         return self.name
+
+    def get_color(self):
+        if self.category_group:
+            return self.category_group.get_color()
+        else:
+            return self.default_color
 
     def get_data(self):
         data = {
@@ -468,7 +540,7 @@ class Category:
     def get_pixmap(self, radius):
         pixmap = create_category_pixmap(
             text=self.emoji,
-            color=self.category_group.color,
+            color=self.get_color(),
             radius=radius
         )
         return pixmap
@@ -476,13 +548,28 @@ class Category:
     def get_icon(self, radius):
         icon = create_category_icon(
             text=self.emoji,
-            color=self.category_group.color,
+            color=self.get_color(),
             radius=radius
         )
         return icon
 
 
 class Date(QDate):
+
+    month_labels = (
+        'january',
+        'february',
+        'march',
+        'april',
+        'may',
+        'june',
+        'july',
+        'august',
+        'september',
+        'october',
+        'november',
+        'december',
+    )
 
     def __str__(self):
         return self.toString('dd/MM/yyyy')
@@ -491,81 +578,232 @@ class Date(QDate):
     def from_string(cls, s):
         return cls(datetime.strptime(s, '%d/%m/%Y'))
 
+    def get_month_name(self):
+        return self.toString('MMMM').lower()
+
+
+# class Amount:
+#
+#     def __init__(self, int_=0, currency=CURRENCIES.EUR, seperator=','):
+#         self.int = int_
+#         self.currency = currency
+#         self.seperator = seperator
+#
+#     def __str__(self):
+#         return self.as_string()
+#
+#     def __int__(self):
+#         return self.int
+#
+#     def as_string(self):
+#         int_str = f'{self.int:03d}'
+#         cents_str = int_str[-2:]
+#         unit_str = int_str[:-2]
+#
+#         unit_str_formatted = ''
+#         for index, character in enumerate(unit_str[::-1]):
+#             if index % 3 == 0 and character != '-' and index != 0:
+#                 unit_str_formatted += ' '
+#             unit_str_formatted += character
+#         unit_str_formatted = unit_str_formatted[::-1]
+#
+#         symbol = CURRENCIES.SYMBOLS.get(self.currency)
+#         pattern = CURRENCIES.PATTERN.get(self.currency)
+#
+#         s = pattern.format(
+#             unit=unit_str_formatted,
+#             seperator=self.seperator,
+#             cents=cents_str,
+#             symbol=symbol,
+#         )
+#         return s
+#
+#     def as_unit(self):
+#         return self.int / 100
+#
+#     @classmethod
+#     def from_float(cls, float_, currency=CURRENCIES.EUR, seperator=','):
+#         int_ = int(float_ * 100)
+#         amount = cls(int_, currency, seperator)
+#         return amount
+#
+#     @classmethod
+#     def from_text(cls, text, currency=CURRENCIES.EUR, seperator=','):
+#         # remove space characters
+#         space_characters = '\u202f', '\xa0', ' '
+#         for x in space_characters:
+#             text = text.replace(x, '')
+#
+#         pattern = r'(-?)(\d*)' + seperator + r'(\d*)'
+#
+#         match = re.match(pattern, text)
+#         if match:
+#             sign, unit, cents = match.groups()
+#
+#             if sign is None:
+#                 sign = ''
+#
+#             if unit is None:
+#                 unit = '0'
+#
+#             if cents is None:
+#                 cents = '00'
+#             else:
+#                 cents_int = int(cents)
+#                 cents = f'{cents_int:02d}'
+#
+#             int_str = f'{sign}{unit}{cents}'
+#             int_ = int(int_str)
+#         else:
+#             raise Exception(f'Text {text!r} does not match pattern {pattern!r}')
+#
+#         amount = cls(int_, currency, seperator)
+#         return amount
+
 
 class Amount:
 
-    def __init__(self, int_=0, currency=CURRENCIES.EUR, seperator=','):
-        self.int = int_
-        self.currency = currency
-        self.seperator = seperator
+    def __init__(self, cents:int=0):
+        self.cents = cents
+        self.symbol = '€'
+        self.separator = ','
+        self.units_separator = ' '
+        self.pattern_with_cents = '{units}{separator}{cents:02d} {symbol}'
+        self.pattern_without_cents = '{units} {symbol}'
+
+    def __eq__(self, other):
+        if isinstance(other, Amount):
+            is_equal = self.cents == other.cents
+        else:
+            raise TypeError(f'{type(other)} type is not supported')
+
+        return is_equal
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __gt__(self, other):
+        if isinstance(other, Amount):
+            is_greater_than = self.cents > other.cents
+        else:
+            raise TypeError(f'{type(other)} type is not supported')
+
+        return is_greater_than
+
+    def __lt__(self, other):
+        return not self.__gt__(other)
 
     def __str__(self):
-        int_str = f'{self.int:03d}'
-        cents_str = int_str[-2:]
-        unit_str = int_str[:-2]
+        return self.as_string_with_cents()
 
-        unit_str_formatted = ''
-        for index, character in enumerate(unit_str[::-1]):
-            if index % 3 == 0 and character != '-' and index != 0:
-                unit_str_formatted += ' '
-            unit_str_formatted += character
-        unit_str_formatted = unit_str_formatted[::-1]
+    def __add__(self, other):
+        if isinstance(other, Amount):
+            cents = self.cents + other.cents
+        else:
+            raise TypeError(f'{type(other)} type is not supported')
 
-        symbol = CURRENCIES.SYMBOLS.get(self.currency)
-        pattern = CURRENCIES.PATTERN.get(self.currency)
+        new_amount = Amount(cents)
+        return new_amount
 
-        s = pattern.format(
-            unit=unit_str_formatted,
-            seperator=self.seperator,
-            cents=cents_str,
-            symbol=symbol,
+    def __sub__(self, other):
+        if isinstance(other, Amount):
+            cents = self.cents - other.cents
+        else:
+            raise TypeError(f'{type(other)} type is not supported')
+
+        new_amount = Amount(cents)
+        return new_amount
+
+    def __truediv__(self, other):
+        if isinstance(other, (int, float)):
+            cents = self.cents / other
+            cents = int(cents)
+        else:
+            raise TypeError(f'{type(other)} type is not supported')
+
+        new_amount = Amount(cents)
+        return new_amount
+
+    @classmethod
+    def from_string(cls, s):
+        amount = cls()
+
+        space_characters = '\u202f', '\xa0', ' '
+        for x in space_characters:
+            s = s.replace(x, '') # remove space characters from string
+
+        pattern = r'(-?)(\d*)' + amount.separator + r'(\d*)'
+
+        match = re.match(pattern, s)
+        if match:
+            sign, units, cents = match.groups()
+
+            if units:
+                amount.cents += int(units) * 100
+
+            if cents:
+                amount.cents += int(cents)
+
+            if sign is '-':
+                amount.cents *= -1
+
+        else:
+            raise Exception(f'String {s!r} does not match pattern {pattern!r}')
+
+        return amount
+
+    @classmethod
+    def from_units(cls, units):
+        amount = cls()
+        amount.cents = int(units * 100)
+        return amount
+
+    def as_units_and_cents(self):
+        units, cents = divmod(abs(self.cents), 100)
+        sign = '-' if self.cents < 0 else ''
+        return sign, units, cents
+
+    def as_units(self):
+        return self.cents / 100
+
+    @staticmethod
+    def get_formatted_string_units(sign, units):
+        units_str = ''
+
+        count = 0
+        for x in reversed(str(units)):
+            if count == 3:
+                count = 0
+                units_str += ' '
+
+            count += 1
+            units_str += x
+
+
+        units_str = sign + units_str[::-1]
+        return units_str
+
+    def as_string_with_cents(self):
+        sign, units, cents = self.as_units_and_cents()
+        units_str = self.get_formatted_string_units(sign, units)
+
+        s = self.pattern_with_cents.format(
+            units=units_str,
+            cents=abs(cents),
+            symbol=self.symbol,
+            separator=self.separator,
         )
         return s
 
-    def __int__(self):
-        return self.int
+    def as_string_without_cents(self):
+        sign, units, cents = self.as_units_and_cents()
+        units_str = self.get_formatted_string_units(sign, units)
 
-    def as_unit(self):
-        return self.int / 100
-
-    @classmethod
-    def from_float(cls, float_, currency=CURRENCIES.EUR, seperator=','):
-        int_ = int(float_ * 100)
-        amount = cls(int_, currency, seperator)
-        return amount
-
-    @classmethod
-    def from_text(cls, text, currency=CURRENCIES.EUR, seperator=','):
-        # remove space characters
-        space_characters = '\u202f', '\xa0', ' '
-        for x in space_characters:
-            text = text.replace(x, '')
-
-        pattern = r'(-?)(\d*)' + seperator + r'(\d*)'
-
-        match = re.match(pattern, text)
-        if match:
-            sign, unit, cents = match.groups()
-
-            if sign is None:
-                sign = ''
-
-            if unit is None:
-                unit = '0'
-
-            if cents is None:
-                cents = '00'
-            else:
-                cents_int = int(cents)
-                cents = f'{cents_int:02d}'
-
-            int_str = f'{sign}{unit}{cents}'
-            int_ = int(int_str)
-        else:
-            raise Exception(f'Text {text!r} does not match pattern {pattern!r}')
-
-        amount = cls(int_, currency, seperator)
-        return amount
+        s = self.pattern_without_cents.format(
+            units=units_str,
+            symbol=self.symbol,
+        )
+        return s
 
 
 class Account:

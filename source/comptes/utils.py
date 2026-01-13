@@ -107,3 +107,14 @@ def create_category_pixmap(text, color, radius):
     painter.end()
 
     return pixmap
+
+
+def blend_vectors(vector_a, vector_b, blender):
+
+    result = list()
+
+    for a, b in zip(vector_a, vector_b):
+        c = a * (1 - blender) + b * blender
+        result.append(c)
+
+    return result
