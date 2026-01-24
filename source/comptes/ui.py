@@ -124,13 +124,10 @@ class DatePicker(QLineEdit):
         self.menu.exec_(self.mapToGlobal(self.rect().bottomLeft()))
 
     def set_selected_date(self, date):
+        print('set_selected_date', date)
         if date is None:
             date = self.default_date
-        else:
-            date = QDate.fromString(str(date), 'dd/MM/yyyy')
-        print(f'default → {self.default_date}')
-        print(f'date → {date}, {type(date)}')
-
+        print('date→', date)
         self.selected_date = date
         self.calendar_widget.blockSignals(True)
         self.calendar_widget.setSelectedDate(date)
@@ -670,7 +667,7 @@ class OperationEditor(QDialog):
         self.category_picker.reload()
 
         self.label_text_edit.setText(label)
-        self.amount_spin.setValue(amount.as_unit())
+        self.amount_spin.setValue(amount.as_units())
         self.is_budget_check.setChecked(is_budget)
         self.note_text_edit.setText(note)
 
@@ -824,15 +821,11 @@ class SummaryItem(QTreeWidgetItem):
         for index in range(12):
             month = index + 1
 
-            is_month_budget = False
-
-            month_operations = self.operations
-            month_operations = [x for x in month_operations if x.date.month() == month]
-            month_budget_operations = [x for x in month_operations if x.is_budget is is_month_budget]
+            month_operations = [x for x in self.operations if x.date.month() == month]
 
             # amount
             month_amount = Amount()
-            for operation in month_budget_operations:
+            for operation in month_operations:
                 month_amount += operation.amount
 
             year_sum += month_amount
@@ -917,8 +910,7 @@ class SummaryTree(QTreeWidget):
             return
 
         # operations
-        account_budget_operations = [x for x in self.project.operations if x.is_budget is False]
-        account_operations = [x for x in account_budget_operations if x.account is self.selected_account]
+        account_operations = [x for x in self.project.operations if x.account is self.selected_account]
         year_operations = [x for x in account_operations if str(x.date.year()) == self.selected_year]
 
         # balance item
@@ -1309,10 +1301,19 @@ class ComptesWidget(QWidget):
         delete_operations_act = QAction('Delete Selected Operations', self)
         delete_operations_act.triggered.connect(self.delete_operations)
 
+        duplicate_selected_operations_act = QAction('Duplicate Selected Operations', self)
+        duplicate_selected_operations_act.triggered.connect(self.duplicate_selected_operations)
+
+        duplicate_offset_one_month_selected_operations_act = QAction('Duplicate Offset One Month Selected Operations', self)
+        duplicate_offset_one_month_selected_operations_act.triggered.connect(self.duplicate_offset_one_month_selected_operations)
+
         edit_menu = QMenu('Edit')
         edit_menu.addAction(edit_operation_act)
         edit_menu.addAction(edit_categories_act)
         edit_menu.addAction(edit_account_act)
+        edit_menu.addSeparator()
+        edit_menu.addAction(duplicate_selected_operations_act)
+        edit_menu.addAction(duplicate_offset_one_month_selected_operations_act)
         edit_menu.addSeparator()
         edit_menu.addAction(guess_category_on_selected_operations_act)
         edit_menu.addSeparator()
@@ -1384,6 +1385,41 @@ class ComptesWidget(QWidget):
             selected_operation_items = None
 
         return selected_operation_items
+
+    def duplicate_selected_operations(self):
+        selected_operation_items = self.get_selected_visible_operation_items()
+
+        if not selected_operation_items:
+            raise Exception('No operation selected')
+
+        for selected_operation_item in selected_operation_items:
+            source_operation = selected_operation_item.operation
+
+            destination_operation = source_operation.get_copy()
+
+            self.project.operations.append(destination_operation)
+
+        self.reload()
+
+    def duplicate_offset_one_month_selected_operations(self):
+        selected_operation_items = self.get_selected_visible_operation_items()
+
+        if not selected_operation_items:
+            raise Exception('No operation selected')
+
+        for selected_operation_item in selected_operation_items:
+            source_operation = selected_operation_item.operation
+
+            destination_operation = source_operation.get_copy()
+
+            new_date = destination_operation.date.addMonths(1)
+            new_date = Date(new_date)
+
+            destination_operation.date = new_date
+
+            self.project.operations.append(destination_operation)
+
+        self.reload()
 
     def delete_operations(self):
         selected_operation_items = self.get_selected_visible_operation_items()

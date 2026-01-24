@@ -350,6 +350,21 @@ class Operation:
         self.is_budget = False
         self.linked_operation = None
 
+    def get_copy(self):
+        operation = self.__class__()
+
+        operation.id = self.id
+        operation.account = self.account
+        operation.label = self.label
+        operation.amount = self.amount
+        operation.category = self.category
+        operation.date = self.date
+        operation.note = self.note
+        operation.is_budget = self.is_budget
+        operation.linked_operation = self.linked_operation
+
+        return operation
+
     def get_data(self):
         category = self.category
         if category is None:
